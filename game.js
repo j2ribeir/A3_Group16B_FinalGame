@@ -32,57 +32,82 @@ const MORTAR_WIDTH = 2;
 // ============================================================
 const LEVEL_CONFIGS = {
   random: {
-    name: 'Random',
-    cols: 25, rows: 25,
+    name: "Random",
+    cols: 25,
+    rows: 25,
     time: 90,
     stressMult: 1.0,
     microSpikes: true,
-    description: 'Randomly generated maze'
+    description: "Randomly generated maze",
   },
   level1: {
-    name: 'Level 1: The Tutorial',
-    cols: 10, rows: 10,
+    name: "Level 1: The Tutorial",
+    cols: 10,
+    rows: 10,
     time: 120,
     stressMult: 0.4,
     microSpikes: false,
-    description: 'Learn the basics'
+    description: "Learn the basics",
   },
   level2: {
-    name: 'Level 2: The Pressure Cooker',
-    cols: 20, rows: 20,
+    name: "Level 2: The Pressure Cooker",
+    cols: 20,
+    rows: 20,
     time: 100,
     stressMult: 1.0,
     microSpikes: true,
-    description: 'Just-in-time tension'
+    description: "Just-in-time tension",
   },
   level3: {
-    name: 'Level 3: The Gauntlet',
-    cols: 25, rows: 25,
+    name: "Level 3: The Gauntlet",
+    cols: 25,
+    rows: 25,
     time: 130,
     stressMult: 1.2,
     microSpikes: true,
-    description: 'Master reversed controls'
-  }
+    description: "Master reversed controls",
+  },
 };
 
 // ============================================================
 // GAME STATE
 // ============================================================
-let gameState = 'menu'; // menu, charSelect, levelSelect, instructions, playing, paused, episode, win, lose
-let gameMode = 'random'; // random, level1, level2, level3
+let gameState = "menu"; // menu, charSelect, levelSelect, instructions, playing, paused, episode, win, lose
+let gameMode = "random"; // random, level1, level2, level3
 let levelSelectIndex = 0;
-const levelOptions = ['level1', 'level2', 'level3', 'random'];
+const levelOptions = ["level1", "level2", "level3", "random"];
 let selectedChar = 0;
 const characters = [
-  { name: 'Knight', color: '#8a9bb2', accent: '#5a6880',
-    speedMult: 1.3, stressMult: 1.4, trait: 'Fast but anxious',
-    spdDesc: 'Moves 30% faster', strDesc: 'Stress rises 40% faster' },
-  { name: 'Mage', color: '#8b6b4a', accent: '#5c4530',
-    speedMult: 0.8, stressMult: 0.65, trait: 'Slow but calm',
-    spdDesc: 'Moves 20% slower', strDesc: 'Stress rises 35% slower' },
-  { name: 'Wolf', color: '#b0b8c0', accent: '#7a8590',
-    speedMult: 1.0, stressMult: 1.0, trait: 'Balanced',
-    spdDesc: 'Normal speed', strDesc: 'Normal stress rate' },
+  {
+    name: "Knight",
+    color: "#8a9bb2",
+    accent: "#5a6880",
+    speedMult: 1.3,
+    stressMult: 1.4,
+    trait: "Fast but anxious",
+    spdDesc: "Moves 30% faster",
+    strDesc: "Stress rises 40% faster",
+  },
+  {
+    name: "Mage",
+    color: "#8b6b4a",
+    accent: "#5c4530",
+    speedMult: 0.8,
+    stressMult: 0.65,
+    trait: "Slow but calm",
+    spdDesc: "Moves 20% slower",
+    strDesc: "Stress rises 35% slower",
+  },
+  {
+    name: "Wolf",
+    color: "#b0b8c0",
+    accent: "#7a8590",
+    speedMult: 1.0,
+    stressMult: 1.0,
+    trait: "Balanced",
+    spdDesc: "Normal speed",
+    strDesc: "Normal stress rate",
+  },
 ];
 
 // Current maze dimensions (set per level)
@@ -102,7 +127,7 @@ let calmZones = [];
 let scaryZones = [];
 let narrowZones = [];
 let highStressZones = []; // Level 3: mandatory high-stress areas
-let tutorialSigns = [];   // Level 1: tutorial sign popups
+let tutorialSigns = []; // Level 1: tutorial sign popups
 let endPos = { x: 0, y: 0 };
 let episodeTimer = 0;
 let episodeDuration = 0;
@@ -141,11 +166,12 @@ let fogBuffer;
 // ============================================================
 let audioCtx = null;
 function getAudioCtx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx)
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
 }
 
-function playTone(freq, duration, type = 'sine', vol = 0.15) {
+function playTone(freq, duration, type = "sine", vol = 0.15) {
   try {
     const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
@@ -158,32 +184,34 @@ function playTone(freq, duration, type = 'sine', vol = 0.15) {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + duration);
-  } catch (e) { /* ignore audio errors */ }
+  } catch (e) {
+    /* ignore audio errors */
+  }
 }
 
 function playEpisodeSound() {
-  playTone(80, 1.5, 'sawtooth', 0.1);
-  playTone(120, 1.5, 'square', 0.05);
+  playTone(80, 1.5, "sawtooth", 0.1);
+  playTone(120, 1.5, "square", 0.05);
 }
 
 function playMicroSpikeSound() {
-  playTone(300, 0.15, 'square', 0.08);
+  playTone(300, 0.15, "square", 0.08);
 }
 
 function playWinSound() {
-  playTone(523, 0.2, 'sine', 0.2);
-  setTimeout(() => playTone(659, 0.2, 'sine', 0.2), 150);
-  setTimeout(() => playTone(784, 0.4, 'sine', 0.2), 300);
+  playTone(523, 0.2, "sine", 0.2);
+  setTimeout(() => playTone(659, 0.2, "sine", 0.2), 150);
+  setTimeout(() => playTone(784, 0.4, "sine", 0.2), 300);
 }
 
 function playLoseSound() {
-  playTone(200, 0.5, 'sawtooth', 0.15);
-  setTimeout(() => playTone(150, 0.8, 'sawtooth', 0.1), 400);
+  playTone(200, 0.5, "sawtooth", 0.15);
+  setTimeout(() => playTone(150, 0.8, "sawtooth", 0.1), 400);
 }
 
 function playStepSound() {
   if (frameCount % 15 === 0) {
-    playTone(100 + random(50), 0.05, 'triangle', 0.03);
+    playTone(100 + random(50), 0.05, "triangle", 0.03);
   }
 }
 
@@ -191,8 +219,12 @@ function playStepSound() {
 // BFS SOLVER - find shortest path through maze
 // ============================================================
 function solveMaze(startR, startC, endR, endC) {
-  const visited = Array.from({ length: MAZE_ROWS }, () => Array(MAZE_COLS).fill(false));
-  const parent = Array.from({ length: MAZE_ROWS }, () => Array(MAZE_COLS).fill(null));
+  const visited = Array.from({ length: MAZE_ROWS }, () =>
+    Array(MAZE_COLS).fill(false),
+  );
+  const parent = Array.from({ length: MAZE_ROWS }, () =>
+    Array(MAZE_COLS).fill(null),
+  );
   const queue = [{ r: startR, c: startC }];
   visited[startR][startC] = true;
 
@@ -234,7 +266,13 @@ function generateMaze() {
   for (let r = 0; r < MAZE_ROWS; r++) {
     maze[r] = [];
     for (let c = 0; c < MAZE_COLS; c++) {
-      maze[r][c] = { top: true, right: true, bottom: true, left: true, visited: false };
+      maze[r][c] = {
+        top: true,
+        right: true,
+        bottom: true,
+        left: true,
+        visited: false,
+      };
     }
   }
 
@@ -246,17 +284,33 @@ function generateMaze() {
   while (stack.length > 0) {
     const { r, c } = current;
     const neighbors = [];
-    if (r > 0 && !maze[r - 1][c].visited) neighbors.push({ r: r - 1, c, dir: 'top' });
-    if (c < MAZE_COLS - 1 && !maze[r][c + 1].visited) neighbors.push({ r, c: c + 1, dir: 'right' });
-    if (r < MAZE_ROWS - 1 && !maze[r + 1][c].visited) neighbors.push({ r: r + 1, c, dir: 'bottom' });
-    if (c > 0 && !maze[r][c - 1].visited) neighbors.push({ r, c: c - 1, dir: 'left' });
+    if (r > 0 && !maze[r - 1][c].visited)
+      neighbors.push({ r: r - 1, c, dir: "top" });
+    if (c < MAZE_COLS - 1 && !maze[r][c + 1].visited)
+      neighbors.push({ r, c: c + 1, dir: "right" });
+    if (r < MAZE_ROWS - 1 && !maze[r + 1][c].visited)
+      neighbors.push({ r: r + 1, c, dir: "bottom" });
+    if (c > 0 && !maze[r][c - 1].visited)
+      neighbors.push({ r, c: c - 1, dir: "left" });
 
     if (neighbors.length > 0) {
       const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-      if (next.dir === 'top') { maze[r][c].top = false; maze[next.r][next.c].bottom = false; }
-      if (next.dir === 'right') { maze[r][c].right = false; maze[next.r][next.c].left = false; }
-      if (next.dir === 'bottom') { maze[r][c].bottom = false; maze[next.r][next.c].top = false; }
-      if (next.dir === 'left') { maze[r][c].left = false; maze[next.r][next.c].right = false; }
+      if (next.dir === "top") {
+        maze[r][c].top = false;
+        maze[next.r][next.c].bottom = false;
+      }
+      if (next.dir === "right") {
+        maze[r][c].right = false;
+        maze[next.r][next.c].left = false;
+      }
+      if (next.dir === "bottom") {
+        maze[r][c].bottom = false;
+        maze[next.r][next.c].top = false;
+      }
+      if (next.dir === "left") {
+        maze[r][c].left = false;
+        maze[next.r][next.c].right = false;
+      }
       maze[next.r][next.c].visited = true;
       stack.push(current);
       current = next;
@@ -268,10 +322,22 @@ function generateMaze() {
 
 // Remove a wall between two adjacent cells
 function removeWall(r1, c1, r2, c2) {
-  if (r2 === r1 - 1) { maze[r1][c1].top = false; maze[r2][c2].bottom = false; }
-  if (r2 === r1 + 1) { maze[r1][c1].bottom = false; maze[r2][c2].top = false; }
-  if (c2 === c1 - 1) { maze[r1][c1].left = false; maze[r2][c2].right = false; }
-  if (c2 === c1 + 1) { maze[r1][c1].right = false; maze[r2][c2].left = false; }
+  if (r2 === r1 - 1) {
+    maze[r1][c1].top = false;
+    maze[r2][c2].bottom = false;
+  }
+  if (r2 === r1 + 1) {
+    maze[r1][c1].bottom = false;
+    maze[r2][c2].top = false;
+  }
+  if (c2 === c1 - 1) {
+    maze[r1][c1].left = false;
+    maze[r2][c2].right = false;
+  }
+  if (c2 === c1 + 1) {
+    maze[r1][c1].right = false;
+    maze[r2][c2].left = false;
+  }
 }
 
 // ============================================================
@@ -289,7 +355,10 @@ function setupRandomLevel() {
     do {
       cr = Math.floor(Math.random() * MAZE_ROWS);
       cc = Math.floor(Math.random() * MAZE_COLS);
-    } while ((cr === 0 && cc === 0) || (cr === MAZE_ROWS - 1 && cc === MAZE_COLS - 1));
+    } while (
+      (cr === 0 && cc === 0) ||
+      (cr === MAZE_ROWS - 1 && cc === MAZE_COLS - 1)
+    );
     calmZones.push({ r: cr, c: cc });
   }
 
@@ -303,7 +372,7 @@ function setupRandomLevel() {
       sc = Math.floor(Math.random() * MAZE_COLS);
     } while (
       (sr === 0 && sc === 0) ||
-      calmZones.some(cz => cz.r === sr && cz.c === sc)
+      calmZones.some((cz) => cz.r === sr && cz.c === sc)
     );
     scaryZones.push({ r: sr, c: sc });
   }
@@ -359,8 +428,8 @@ function setupLevel1() {
     } while (
       (sr === 0 && sc === 0) ||
       (sr === MAZE_ROWS - 1 && sc === MAZE_COLS - 1) ||
-      calmZones.some(cz => cz.r === sr && cz.c === sc) ||
-      path.some(p => p.r === sr && p.c === sc)
+      calmZones.some((cz) => cz.r === sr && cz.c === sc) ||
+      path.some((p) => p.r === sr && p.c === sc)
     );
     scaryZones.push({ r: sr, c: sc });
   }
@@ -376,38 +445,43 @@ function setupLevel1() {
     {
       r: path[Math.min(2, path.length - 1)].r,
       c: path[Math.min(2, path.length - 1)].c,
-      title: 'OBJECTIVE',
-      message: 'Reach the GREEN EXIT before time runs out!\nFollow the green arrow - it points the way.',
-      color: [0, 255, 120]
+      title: "OBJECTIVE",
+      message:
+        "Reach the GREEN EXIT before time runs out!\nFollow the green arrow - it points the way.",
+      color: [0, 255, 120],
     },
     {
       r: path[Math.min(pathStep, path.length - 1)].r,
       c: path[Math.min(pathStep, path.length - 1)].c,
-      title: 'STRESS BAR',
-      message: 'Watch the bar at the bottom - stress rises over time.\nStand still to calm down slightly.',
-      color: [244, 67, 54]
+      title: "STRESS BAR",
+      message:
+        "Watch the bar at the bottom - stress rises over time.\nStand still to calm down slightly.",
+      color: [244, 67, 54],
     },
     {
       r: calmZones[0].r,
       c: calmZones[0].c,
-      title: 'CALM ZONE',
-      message: 'Yellow glowing areas REDUCE your stress.\nStay here to recover before moving on!',
-      color: [255, 200, 100]
+      title: "CALM ZONE",
+      message:
+        "Yellow glowing areas REDUCE your stress.\nStay here to recover before moving on!",
+      color: [255, 200, 100],
     },
     {
       r: path[Math.min(pathStep * 2, path.length - 1)].r,
       c: path[Math.min(pathStep * 2, path.length - 1)].c,
-      title: 'RUNNING & ZOOM',
-      message: 'Hold SHIFT to run faster (more stress!).\nPress Z to zoom out and see more (also stressful!).',
-      color: [100, 180, 255]
+      title: "RUNNING & ZOOM",
+      message:
+        "Hold SHIFT to run faster (more stress!).\nPress Z to zoom out and see more (also stressful!).",
+      color: [100, 180, 255],
     },
     {
       r: path[Math.min(pathStep * 3, path.length - 1)].r,
       c: path[Math.min(pathStep * 3, path.length - 1)].c,
-      title: 'DANGER ZONES',
-      message: 'Red glowing areas INCREASE stress faster.\nAvoid them or pass through quickly!',
-      color: [200, 50, 50]
-    }
+      title: "DANGER ZONES",
+      message:
+        "Red glowing areas INCREASE stress faster.\nAvoid them or pass through quickly!",
+      color: [200, 50, 50],
+    },
   ];
 }
 
@@ -426,7 +500,8 @@ function setupLevel2() {
 
   calmZones = [];
   let simulatedStress = 0;
-  const stressPerCell = STRESS_PASSIVE_RATE * 60 * (CELL_SIZE / PLAYER_SPEED / 60);
+  const stressPerCell =
+    STRESS_PASSIVE_RATE * 60 * (CELL_SIZE / PLAYER_SPEED / 60);
   const calmThreshold = 85; // place calm zone when stress would reach this
 
   for (let i = 0; i < path.length; i++) {
@@ -434,9 +509,14 @@ function setupLevel2() {
 
     // Account for narrow zones adding extra stress
     const cell = maze[path[i].r][path[i].c];
-    const wallCount = (cell.top ? 1 : 0) + (cell.right ? 1 : 0) + (cell.bottom ? 1 : 0) + (cell.left ? 1 : 0);
+    const wallCount =
+      (cell.top ? 1 : 0) +
+      (cell.right ? 1 : 0) +
+      (cell.bottom ? 1 : 0) +
+      (cell.left ? 1 : 0);
     if (wallCount >= 3) {
-      simulatedStress += STRESS_NARROW_RATE * 60 * (CELL_SIZE / PLAYER_SPEED / 60);
+      simulatedStress +=
+        STRESS_NARROW_RATE * 60 * (CELL_SIZE / PLAYER_SPEED / 60);
     }
 
     if (simulatedStress >= calmThreshold) {
@@ -450,7 +530,9 @@ function setupLevel2() {
     const step = Math.floor(path.length / 4);
     for (let i = 1; i <= 3; i++) {
       const idx = Math.min(i * step, path.length - 2);
-      const already = calmZones.some(cz => cz.r === path[idx].r && cz.c === path[idx].c);
+      const already = calmZones.some(
+        (cz) => cz.r === path[idx].r && cz.c === path[idx].c,
+      );
       if (!already) calmZones.push({ r: path[idx].r, c: path[idx].c });
     }
   }
@@ -459,7 +541,7 @@ function setupLevel2() {
   // Scary zones (8-12) - placed off the main path to punish wrong turns
   scaryZones = [];
   const scaryCount = 8 + Math.floor(Math.random() * 5);
-  const pathSet = new Set(path.map(p => `${p.r},${p.c}`));
+  const pathSet = new Set(path.map((p) => `${p.r},${p.c}`));
   for (let i = 0; i < scaryCount; i++) {
     let sr, sc;
     let attempts = 0;
@@ -470,9 +552,9 @@ function setupLevel2() {
     } while (
       attempts < 100 &&
       ((sr === 0 && sc === 0) ||
-      (sr === MAZE_ROWS - 1 && sc === MAZE_COLS - 1) ||
-      calmZones.some(cz => cz.r === sr && cz.c === sc) ||
-      pathSet.has(`${sr},${sc}`))
+        (sr === MAZE_ROWS - 1 && sc === MAZE_COLS - 1) ||
+        calmZones.some((cz) => cz.r === sr && cz.c === sc) ||
+        pathSet.has(`${sr},${sc}`))
     );
     if (attempts < 100) scaryZones.push({ r: sr, c: sc });
   }
@@ -511,7 +593,10 @@ function setupLevel3() {
   for (let seg = 0; seg < 3; seg++) {
     const startIdx = segmentLength * (seg + 1) - 3;
     const corridorLength = 4 + Math.floor(Math.random() * 3);
-    const recoveryIdx = Math.min(startIdx + corridorLength + 1, path.length - 2);
+    const recoveryIdx = Math.min(
+      startIdx + corridorLength + 1,
+      path.length - 2,
+    );
     calmZones.push({ r: path[recoveryIdx].r, c: path[recoveryIdx].c });
   }
 
@@ -531,15 +616,15 @@ function setupLevel3() {
     } while (
       (cr === 0 && cc === 0) ||
       (cr === MAZE_ROWS - 1 && cc === MAZE_COLS - 1) ||
-      highStressZones.some(hz => hz.r === cr && hz.c === cc)
+      highStressZones.some((hz) => hz.r === cr && hz.c === cc)
     );
     calmZones.push({ r: cr, c: cc });
   }
 
   // Scary zones scattered around (not on path or high-stress zones)
   scaryZones = [];
-  const pathSet = new Set(path.map(p => `${p.r},${p.c}`));
-  const hsSet = new Set(highStressZones.map(h => `${h.r},${h.c}`));
+  const pathSet = new Set(path.map((p) => `${p.r},${p.c}`));
+  const hsSet = new Set(highStressZones.map((h) => `${h.r},${h.c}`));
   for (let i = 0; i < 10; i++) {
     let sr, sc;
     let attempts = 0;
@@ -550,8 +635,8 @@ function setupLevel3() {
     } while (
       attempts < 100 &&
       ((sr === 0 && sc === 0) ||
-      calmZones.some(cz => cz.r === sr && cz.c === sc) ||
-      hsSet.has(`${sr},${sc}`))
+        calmZones.some((cz) => cz.r === sr && cz.c === sc) ||
+        hsSet.has(`${sr},${sc}`))
     );
     if (attempts < 100) scaryZones.push({ r: sr, c: sc });
   }
@@ -586,13 +671,15 @@ function placePlayerAndRandomExit() {
     exitC = Math.floor(Math.random() * MAZE_COLS);
     attempts++;
   } while (
-    attempts < 200 &&
-    (exitR === 0 && exitC === 0) ||
-    (Math.abs(exitR) + Math.abs(exitC) < minDist)
+    (attempts < 200 && exitR === 0 && exitC === 0) ||
+    Math.abs(exitR) + Math.abs(exitC) < minDist
   );
 
   // Fallback to corner if loop exhausted
-  if (attempts >= 200) { exitR = MAZE_ROWS - 1; exitC = MAZE_COLS - 1; }
+  if (attempts >= 200) {
+    exitR = MAZE_ROWS - 1;
+    exitC = MAZE_COLS - 1;
+  }
 
   endPos.x = exitC * CELL_SIZE + CELL_SIZE / 2;
   endPos.y = exitR * CELL_SIZE + CELL_SIZE / 2;
@@ -603,7 +690,11 @@ function findNarrowZones() {
   for (let r = 0; r < MAZE_ROWS; r++) {
     for (let c = 0; c < MAZE_COLS; c++) {
       const cell = maze[r][c];
-      const wallCount = (cell.top ? 1 : 0) + (cell.right ? 1 : 0) + (cell.bottom ? 1 : 0) + (cell.left ? 1 : 0);
+      const wallCount =
+        (cell.top ? 1 : 0) +
+        (cell.right ? 1 : 0) +
+        (cell.bottom ? 1 : 0) +
+        (cell.left ? 1 : 0);
       if (wallCount >= 3) {
         narrowZones.push({ r, c });
       }
@@ -621,8 +712,8 @@ function placeTimeBoosts(count) {
     } while (
       (br === 0 && bc === 0) ||
       (br === MAZE_ROWS - 1 && bc === MAZE_COLS - 1) ||
-      calmZones.some(cz => cz.r === br && cz.c === bc) ||
-      timeBoosts.some(tb => tb.r === br && tb.c === bc)
+      calmZones.some((cz) => cz.r === br && cz.c === bc) ||
+      timeBoosts.some((tb) => tb.r === br && tb.c === bc)
     );
     timeBoosts.push({ r: br, c: bc, collected: false });
   }
@@ -633,12 +724,16 @@ function generateDecorations() {
   for (let r = 0; r < MAZE_ROWS; r++) {
     for (let c = 0; c < MAZE_COLS; c++) {
       const cell = maze[r][c];
-      const wallCount = (cell.top ? 1 : 0) + (cell.right ? 1 : 0) + (cell.bottom ? 1 : 0) + (cell.left ? 1 : 0);
+      const wallCount =
+        (cell.top ? 1 : 0) +
+        (cell.right ? 1 : 0) +
+        (cell.bottom ? 1 : 0) +
+        (cell.left ? 1 : 0);
       if (wallCount >= 3 && Math.random() < 0.4) {
-        decorations.push({ r, c, type: 'cobweb' });
+        decorations.push({ r, c, type: "cobweb" });
       }
       if (Math.random() < 0.08) {
-        decorations.push({ r, c, type: 'moss' });
+        decorations.push({ r, c, type: "moss" });
       }
     }
   }
@@ -672,10 +767,46 @@ function renderMazeTexture() {
       const wy = r * CELL_SIZE;
       const wt = WALL_THICKNESS;
 
-      if (cell.top) drawWallSegment(g, wx, wy - wt / 2, CELL_SIZE, wt, true, r * MAZE_COLS + c + 1000);
-      if (cell.bottom) drawWallSegment(g, wx, wy + CELL_SIZE - wt / 2, CELL_SIZE, wt, true, r * MAZE_COLS + c + 2000);
-      if (cell.left) drawWallSegment(g, wx - wt / 2, wy, wt, CELL_SIZE, false, r * MAZE_COLS + c + 3000);
-      if (cell.right) drawWallSegment(g, wx + CELL_SIZE - wt / 2, wy, wt, CELL_SIZE, false, r * MAZE_COLS + c + 4000);
+      if (cell.top)
+        drawWallSegment(
+          g,
+          wx,
+          wy - wt / 2,
+          CELL_SIZE,
+          wt,
+          true,
+          r * MAZE_COLS + c + 1000,
+        );
+      if (cell.bottom)
+        drawWallSegment(
+          g,
+          wx,
+          wy + CELL_SIZE - wt / 2,
+          CELL_SIZE,
+          wt,
+          true,
+          r * MAZE_COLS + c + 2000,
+        );
+      if (cell.left)
+        drawWallSegment(
+          g,
+          wx - wt / 2,
+          wy,
+          wt,
+          CELL_SIZE,
+          false,
+          r * MAZE_COLS + c + 3000,
+        );
+      if (cell.right)
+        drawWallSegment(
+          g,
+          wx + CELL_SIZE - wt / 2,
+          wy,
+          wt,
+          CELL_SIZE,
+          false,
+          r * MAZE_COLS + c + 4000,
+        );
     }
   }
 
@@ -684,9 +815,9 @@ function renderMazeTexture() {
     const dx = dec.c * CELL_SIZE;
     const dy = dec.r * CELL_SIZE;
 
-    if (dec.type === 'cobweb') {
+    if (dec.type === "cobweb") {
       drawCobweb(g, dx, dy, maze[dec.r][dec.c]);
-    } else if (dec.type === 'moss') {
+    } else if (dec.type === "moss") {
       drawMoss(g, dx, dy, dec.r * MAZE_COLS + dec.c);
     }
   }
@@ -710,7 +841,7 @@ function drawFloorTile(g, x, y, seed) {
   g.rect(x, y, CELL_SIZE, CELL_SIZE);
 
   for (let br = 0; br < 3; br++) {
-    const rowOffset = (br % 2 === 1) ? brickW / 2 : 0;
+    const rowOffset = br % 2 === 1 ? brickW / 2 : 0;
     for (let bc = 0; bc < 3; bc++) {
       const bx = x + MORTAR_WIDTH + bc * (brickW + MORTAR_WIDTH) + rowOffset;
       const by = y + MORTAR_WIDTH + br * (brickH + MORTAR_WIDTH);
@@ -745,10 +876,16 @@ function drawFloorTile(g, x, y, seed) {
   if (seededRandom(seed + 500) < 0.03) {
     g.stroke(15, 12, 10, 80);
     g.strokeWeight(1);
-    const crackX = x + CELL_SIZE * 0.3 + seededRandom(seed + 501) * CELL_SIZE * 0.4;
+    const crackX =
+      x + CELL_SIZE * 0.3 + seededRandom(seed + 501) * CELL_SIZE * 0.4;
     const crackY = y + 4;
     g.line(crackX, crackY, crackX + 6, crackY + CELL_SIZE * 0.6);
-    g.line(crackX + 6, crackY + CELL_SIZE * 0.6, crackX + 2, crackY + CELL_SIZE - 4);
+    g.line(
+      crackX + 6,
+      crackY + CELL_SIZE * 0.6,
+      crackX + 2,
+      crackY + CELL_SIZE - 4,
+    );
     g.noStroke();
   }
 }
@@ -810,9 +947,16 @@ function drawCobweb(g, x, y, cell) {
   let cornerY = y;
   if (!cell.top && cell.bottom) cornerY = y + CELL_SIZE;
   if (!cell.left && cell.right) cornerX = x + CELL_SIZE;
-  if (cell.right && cell.bottom) { cornerX = x + CELL_SIZE; cornerY = y + CELL_SIZE; }
-  else if (cell.left && cell.bottom) { cornerX = x; cornerY = y + CELL_SIZE; }
-  else if (cell.right && cell.top) { cornerX = x + CELL_SIZE; cornerY = y; }
+  if (cell.right && cell.bottom) {
+    cornerX = x + CELL_SIZE;
+    cornerY = y + CELL_SIZE;
+  } else if (cell.left && cell.bottom) {
+    cornerX = x;
+    cornerY = y + CELL_SIZE;
+  } else if (cell.right && cell.top) {
+    cornerX = x + CELL_SIZE;
+    cornerY = y;
+  }
 
   g.stroke(180, 180, 180, 40);
   g.strokeWeight(1);
@@ -830,9 +974,13 @@ function drawCobweb(g, x, y, cell) {
   g.stroke(180, 180, 180, 25);
   for (let ring = 1; ring <= 2; ring++) {
     const offset = ring * 5;
-    g.arc(cornerX + dirX * offset, cornerY + dirY * offset, offset * 2, offset * 2,
-      dirX > 0 ? (dirY > 0 ? 0 : PI + HALF_PI) : (dirY > 0 ? HALF_PI : PI),
-      dirX > 0 ? (dirY > 0 ? HALF_PI : TWO_PI) : (dirY > 0 ? PI : PI + HALF_PI)
+    g.arc(
+      cornerX + dirX * offset,
+      cornerY + dirY * offset,
+      offset * 2,
+      offset * 2,
+      dirX > 0 ? (dirY > 0 ? 0 : PI + HALF_PI) : dirY > 0 ? HALF_PI : PI,
+      dirX > 0 ? (dirY > 0 ? HALF_PI : TWO_PI) : dirY > 0 ? PI : PI + HALF_PI,
     );
   }
   g.noStroke();
@@ -843,7 +991,8 @@ function drawMoss(g, x, y, seed) {
   g.noStroke();
   for (let i = 0; i < 8; i++) {
     const mx = x + seededRandom(seed + i * 3) * CELL_SIZE;
-    const my = y + CELL_SIZE * 0.6 + seededRandom(seed + i * 3 + 1) * CELL_SIZE * 0.35;
+    const my =
+      y + CELL_SIZE * 0.6 + seededRandom(seed + i * 3 + 1) * CELL_SIZE * 0.35;
     const ms = 2 + seededRandom(seed + i * 3 + 2) * 3;
     g.fill(40, 65, 30, 60 + seededRandom(seed + i * 5) * 40);
     g.rect(mx, my, ms, ms);
@@ -856,7 +1005,7 @@ function drawMoss(g, x, y, seed) {
 function getPlayerCell() {
   return {
     r: Math.floor(player.y / CELL_SIZE),
-    c: Math.floor(player.x / CELL_SIZE)
+    c: Math.floor(player.x / CELL_SIZE),
   };
 }
 
@@ -870,7 +1019,12 @@ function canMove(nx, ny) {
   ];
 
   for (const corner of corners) {
-    if (corner.x < 0 || corner.y < 0 || corner.x >= MAZE_WIDTH || corner.y >= MAZE_HEIGHT) {
+    if (
+      corner.x < 0 ||
+      corner.y < 0 ||
+      corner.x >= MAZE_WIDTH ||
+      corner.y >= MAZE_HEIGHT
+    ) {
       return false;
     }
   }
@@ -878,7 +1032,8 @@ function canMove(nx, ny) {
   const margin = 2;
   const cellR = Math.floor(ny / CELL_SIZE);
   const cellC = Math.floor(nx / CELL_SIZE);
-  if (cellR < 0 || cellR >= MAZE_ROWS || cellC < 0 || cellC >= MAZE_COLS) return false;
+  if (cellR < 0 || cellR >= MAZE_ROWS || cellC < 0 || cellC >= MAZE_COLS)
+    return false;
 
   const cell = maze[cellR][cellC];
   const cellX = cellC * CELL_SIZE;
@@ -896,7 +1051,7 @@ function canMove(nx, ny) {
 // p5.js PRELOAD
 // ============================================================
 function preload() {
-  menuBgImage = loadImage('menu-bg.png');
+  menuBgImage = loadImage("menu-bg.png");
 }
 
 // ============================================================
@@ -905,7 +1060,7 @@ function preload() {
 function setup() {
   createCanvas(windowWidth, windowHeight);
   fogBuffer = createGraphics(windowWidth, windowHeight);
-  textFont('Courier New');
+  textFont("Courier New");
   lastTime = millis();
 }
 
@@ -918,63 +1073,74 @@ function windowResized() {
 // p5.js INPUT
 // ============================================================
 function keyPressed() {
-  if (key === 'Enter') {
-    if (gameState === 'menu') {
-      gameState = 'charSelect';
-    } else if (gameState === 'charSelect') {
-      gameState = 'levelSelect';
-    } else if (gameState === 'levelSelect') {
+  if (key === "Enter") {
+    if (gameState === "menu") {
+      gameState = "charSelect";
+    } else if (gameState === "charSelect") {
+      gameState = "levelSelect";
+    } else if (gameState === "levelSelect") {
       gameMode = levelOptions[levelSelectIndex];
-      gameState = 'instructions';
-    } else if (gameState === 'instructions') {
+      gameState = "instructions";
+    } else if (gameState === "instructions") {
       startGame();
-    } else if (gameState === 'win' || gameState === 'lose') {
-      gameState = 'menu';
+    } else if (gameState === "win" || gameState === "lose") {
+      gameState = "menu";
     }
   }
 
-  if (key === 'p' || key === 'P') {
-    if (gameState === 'playing' || gameState === 'episode') {
-      gameState = 'paused';
-    } else if (gameState === 'paused') {
-      gameState = 'playing';
+  if (key === "p" || key === "P") {
+    if (gameState === "playing" || gameState === "episode") {
+      gameState = "paused";
+    } else if (gameState === "paused") {
+      gameState = "playing";
     }
   }
 
-  if (key === 'r' || key === 'R') {
-    if (gameState === 'playing' || gameState === 'paused' || gameState === 'episode' || gameState === 'win' || gameState === 'lose') {
+  if (key === "r" || key === "R") {
+    if (
+      gameState === "playing" ||
+      gameState === "paused" ||
+      gameState === "episode" ||
+      gameState === "win" ||
+      gameState === "lose"
+    ) {
       startGame();
     }
   }
 
-  if (gameState === 'charSelect') {
-    if (keyCode === LEFT_ARROW || key === 'a' || key === 'A') {
+  if (gameState === "charSelect") {
+    if (keyCode === LEFT_ARROW || key === "a" || key === "A") {
       selectedChar = (selectedChar - 1 + characters.length) % characters.length;
     }
-    if (keyCode === RIGHT_ARROW || key === 'd' || key === 'D') {
+    if (keyCode === RIGHT_ARROW || key === "d" || key === "D") {
       selectedChar = (selectedChar + 1) % characters.length;
     }
   }
 
-  if (gameState === 'levelSelect') {
-    if (keyCode === UP_ARROW || key === 'w' || key === 'W') {
-      levelSelectIndex = (levelSelectIndex - 1 + levelOptions.length) % levelOptions.length;
+  if (gameState === "levelSelect") {
+    if (keyCode === UP_ARROW || key === "w" || key === "W") {
+      levelSelectIndex =
+        (levelSelectIndex - 1 + levelOptions.length) % levelOptions.length;
     }
-    if (keyCode === DOWN_ARROW || key === 's' || key === 'S') {
+    if (keyCode === DOWN_ARROW || key === "s" || key === "S") {
       levelSelectIndex = (levelSelectIndex + 1) % levelOptions.length;
     }
   }
 
   // Escape key - return to previous screen
   if (keyCode === ESCAPE) {
-    if (gameState === 'charSelect') {
-      gameState = 'menu';
-    } else if (gameState === 'levelSelect') {
-      gameState = 'charSelect';
-    } else if (gameState === 'instructions') {
-      gameState = 'levelSelect';
-    } else if (gameState === 'playing' || gameState === 'episode' || gameState === 'paused') {
-      gameState = 'menu';
+    if (gameState === "charSelect") {
+      gameState = "menu";
+    } else if (gameState === "levelSelect") {
+      gameState = "charSelect";
+    } else if (gameState === "instructions") {
+      gameState = "levelSelect";
+    } else if (
+      gameState === "playing" ||
+      gameState === "episode" ||
+      gameState === "paused"
+    ) {
+      gameState = "menu";
     }
   }
 
@@ -993,11 +1159,11 @@ function startGame() {
   GAME_TIME = config.time;
 
   // Setup level-specific maze and zones
-  if (gameMode === 'level1') {
+  if (gameMode === "level1") {
     setupLevel1();
-  } else if (gameMode === 'level2') {
+  } else if (gameMode === "level2") {
     setupLevel2();
-  } else if (gameMode === 'level3') {
+  } else if (gameMode === "level3") {
     setupLevel3();
   } else {
     setupRandomLevel();
@@ -1013,7 +1179,7 @@ function startGame() {
   activeTutorialSign = null;
   tutorialSignTimer = 0;
   shownSigns = new Set();
-  gameState = 'playing';
+  gameState = "playing";
   lastTime = millis();
 }
 
@@ -1026,7 +1192,7 @@ function updateGame() {
   if (dt > 0.1) dt = 0.1;
   lastTime = now;
 
-  if (gameState === 'playing' || gameState === 'episode') {
+  if (gameState === "playing" || gameState === "episode") {
     updatePlaying();
   }
 }
@@ -1038,13 +1204,14 @@ function updatePlaying() {
   timer -= dt;
   if (timer <= 0) {
     timer = 0;
-    gameState = 'lose';
+    gameState = "lose";
     playLoseSound();
     return;
   }
 
   // Movement
-  let dx = 0, dy = 0;
+  let dx = 0,
+    dy = 0;
   let up = keyIsDown(UP_ARROW) || keyIsDown(87);
   let down = keyIsDown(DOWN_ARROW) || keyIsDown(83);
   let left = keyIsDown(LEFT_ARROW) || keyIsDown(65);
@@ -1071,7 +1238,7 @@ function updatePlaying() {
   let spd = (isRunning ? RUN_SPEED : PLAYER_SPEED) * ch.speedMult;
   const isMoving = dx !== 0 || dy !== 0;
 
-  if (gameState === 'episode') {
+  if (gameState === "episode") {
     spd *= 0.5;
     if (frameCount % 4 < 2) {
       dx = 0;
@@ -1103,14 +1270,16 @@ function updatePlaying() {
 
   // Zone detection
   const { r, c } = getPlayerCell();
-  const inCalmZone = calmZones.some(cz => cz.r === r && cz.c === c);
-  const inScaryZone = scaryZones.some(sz => sz.r === r && sz.c === c);
-  const inNarrowZone = narrowZones.some(nz => nz.r === r && nz.c === c);
-  const inHighStressZone = highStressZones.some(hz => hz.r === r && hz.c === c);
+  const inCalmZone = calmZones.some((cz) => cz.r === r && cz.c === c);
+  const inScaryZone = scaryZones.some((sz) => sz.r === r && sz.c === c);
+  const inNarrowZone = narrowZones.some((nz) => nz.r === r && nz.c === c);
+  const inHighStressZone = highStressZones.some(
+    (hz) => hz.r === r && hz.c === c,
+  );
 
   // Tutorial sign detection (Level 1)
   if (tutorialSigns.length > 0) {
-    const nearSign = tutorialSigns.find(ts => ts.r === r && ts.c === c);
+    const nearSign = tutorialSigns.find((ts) => ts.r === r && ts.c === c);
     if (nearSign && !shownSigns.has(`${nearSign.r},${nearSign.c}`)) {
       activeTutorialSign = nearSign;
       tutorialSignTimer = 180; // 3 seconds at 60fps
@@ -1125,7 +1294,7 @@ function updatePlaying() {
   }
 
   // Stress calculation
-  if (gameState !== 'episode') {
+  if (gameState !== "episode") {
     const stressMult = ch.stressMult * config.stressMult;
     stress += STRESS_PASSIVE_RATE * dt * 60 * stressMult;
     if (isMoving && isRunning) stress += STRESS_RUN_RATE * dt * 60 * stressMult;
@@ -1150,7 +1319,7 @@ function updatePlaying() {
     stress = constrain(stress, 0, 100);
 
     if (stress >= 100) {
-      gameState = 'episode';
+      gameState = "episode";
       controlsInverted = true;
       episodeDuration = 5;
       episodeTimer = episodeDuration;
@@ -1162,7 +1331,7 @@ function updatePlaying() {
     screenShake.y = (Math.random() - 0.5) * 12;
 
     if (episodeTimer <= 0) {
-      gameState = 'playing';
+      gameState = "playing";
       controlsInverted = false;
       stress = 60;
       screenShake = { x: 0, y: 0 };
@@ -1179,15 +1348,15 @@ function updatePlaying() {
       tb.collected = true;
       timer += TIME_BOOST_AMOUNT;
       timeBoostFlash = 60;
-      playTone(660, 0.15, 'sine', 0.2);
-      playTone(880, 0.15, 'sine', 0.15);
+      playTone(660, 0.15, "sine", 0.2);
+      playTone(880, 0.15, "sine", 0.15);
     }
   }
 
   // Win condition
   const distToEnd = dist(player.x, player.y, endPos.x, endPos.y);
   if (distToEnd < CELL_SIZE / 2) {
-    gameState = 'win';
+    gameState = "win";
     playWinSound();
   }
 }
@@ -1198,22 +1367,22 @@ function updatePlaying() {
 function draw() {
   updateGame();
 
-  if (gameState === 'menu') {
+  if (gameState === "menu") {
     drawMenu();
-  } else if (gameState === 'charSelect') {
+  } else if (gameState === "charSelect") {
     drawCharSelect();
-  } else if (gameState === 'levelSelect') {
+  } else if (gameState === "levelSelect") {
     drawLevelSelect();
-  } else if (gameState === 'instructions') {
+  } else if (gameState === "instructions") {
     drawInstructions();
-  } else if (gameState === 'playing' || gameState === 'episode') {
+  } else if (gameState === "playing" || gameState === "episode") {
     drawGameplay();
-  } else if (gameState === 'paused') {
+  } else if (gameState === "paused") {
     drawGameplay();
     drawPauseOverlay();
-  } else if (gameState === 'win') {
+  } else if (gameState === "win") {
     drawWinScreen();
-  } else if (gameState === 'lose') {
+  } else if (gameState === "lose") {
     drawLoseScreen();
   }
 }
@@ -1254,36 +1423,40 @@ function drawMenu() {
   textStyle(BOLD);
   textSize(64);
   fill(255);
-  text('LOST CONTROL', cx, cy - 120);
+  text("LOST CONTROL", cx, cy - 120);
 
   textStyle(NORMAL);
   textSize(22);
   fill(180);
-  text('An Epilepsy Awareness Experience', cx, cy - 65);
+  text("An Epilepsy Awareness Experience", cx, cy - 65);
 
   if (Math.random() < 0.05) {
     fill(255);
-    text('An Epilepsy Awareness Experience', cx, cy - 65);
+    text("An Epilepsy Awareness Experience", cx, cy - 65);
   }
 
   textSize(20);
   fill(200);
   text("You are on a journey but terrified of what's to come.", cx, cy + 10);
-  text('Navigate the maze before time runs out.', cx, cy + 40);
-  text('But beware... you might lose control.', cx, cy + 70);
+  text("Navigate the maze before time runs out.", cx, cy + 40);
+  text("But beware... you might lose control.", cx, cy + 70);
 
   const blink = sin(frameCount * 0.08) > 0;
   if (blink) {
     textStyle(BOLD);
     textSize(28);
     fill(255);
-    text('[ PRESS ENTER TO START ]', cx, cy + 140);
+    text("[ PRESS ENTER TO START ]", cx, cy + 140);
   }
 
   textStyle(NORMAL);
   textSize(16);
   fill(150);
-  text('WASD / Arrow Keys = Move  |  Shift = Run  |  P = Pause  |  R = Restart', cx, height - 30);
+  text(
+    "WASD / Arrow Keys = Move  |  Shift = Run  |  P = Pause  |  R = Restart",
+    cx,
+    height - 30,
+  );
 }
 
 // ============================================================
@@ -1299,16 +1472,16 @@ function drawCharSelect() {
   textStyle(BOLD);
   textSize(44);
   fill(224);
-  text('CHOOSE YOUR CHARACTER', cx, cy - 130);
+  text("CHOOSE YOUR CHARACTER", cx, cy - 130);
 
   textStyle(NORMAL);
   textSize(18);
   fill(136);
-  text('Use LEFT / RIGHT arrow keys to select, ENTER to confirm', cx, cy - 85);
+  text("Use LEFT / RIGHT arrow keys to select, ENTER to confirm", cx, cy - 85);
 
   textSize(14);
   fill(100);
-  text('Press ESC to return to menu', cx, cy - 62);
+  text("Press ESC to return to menu", cx, cy - 62);
 
   const spacing = 180;
   const startX = cx - spacing;
@@ -1328,8 +1501,8 @@ function drawCharSelect() {
       fill(255);
       textStyle(BOLD);
       textSize(24);
-      text('>', x + 80, y + 5);
-      text('<', x - 80, y + 5);
+      text(">", x + 80, y + 5);
+      text("<", x - 80, y + 5);
     }
 
     push();
@@ -1372,16 +1545,16 @@ function drawLevelSelect() {
   textStyle(BOLD);
   textSize(44);
   fill(224);
-  text('SELECT LEVEL', cx, cy - 200);
+  text("SELECT LEVEL", cx, cy - 200);
 
   textStyle(NORMAL);
   textSize(18);
   fill(136);
-  text('Use UP / DOWN to select, ENTER to confirm', cx, cy - 160);
+  text("Use UP / DOWN to select, ENTER to confirm", cx, cy - 160);
 
   textSize(14);
   fill(100);
-  text('Press ESC to go back', cx, cy - 138);
+  text("Press ESC to go back", cx, cy - 138);
 
   const optionHeight = 70;
   const startY = cy - 60;
@@ -1407,11 +1580,11 @@ function drawLevelSelect() {
     textSize(22);
 
     // Color code each level
-    if (key === 'level1') {
+    if (key === "level1") {
       fill(selected ? color(0, 255, 120) : color(0, 180, 80));
-    } else if (key === 'level2') {
+    } else if (key === "level2") {
       fill(selected ? color(255, 200, 0) : color(180, 140, 0));
-    } else if (key === 'level3') {
+    } else if (key === "level3") {
       fill(selected ? color(255, 60, 60) : color(180, 40, 40));
     } else {
       fill(selected ? color(100, 180, 255) : color(60, 120, 180));
@@ -1422,7 +1595,11 @@ function drawLevelSelect() {
     textStyle(NORMAL);
     textSize(14);
     fill(selected ? 200 : 120);
-    text(`${config.description}  |  ${config.cols}x${config.rows} maze  |  ${config.time}s`, cx, y + 15);
+    text(
+      `${config.description}  |  ${config.cols}x${config.rows} maze  |  ${config.time}s`,
+      cx,
+      y + 15,
+    );
   }
 
   // Level details for selected
@@ -1435,18 +1612,42 @@ function drawLevelSelect() {
   textSize(16);
   fill(170);
 
-  if (selKey === 'level1') {
-    text('A gentle introduction. Learn the controls, zones, and mechanics.', cx, detailY);
-    text('Stress is very forgiving. Take your time and explore!', cx, detailY + 22);
-  } else if (selKey === 'level2') {
-    text('Stress builds fast. Calm zones are placed at the breaking point.', cx, detailY);
-    text('Manage your speed and path carefully to survive.', cx, detailY + 22);
-  } else if (selKey === 'level3') {
-    text('Mandatory HIGH-STRESS corridors force your controls to invert.', cx, detailY);
-    text('You MUST navigate with reversed controls to progress. Good luck.', cx, detailY + 22);
+  if (selKey === "level1") {
+    text(
+      "A gentle introduction. Learn the controls, zones, and mechanics.",
+      cx,
+      detailY,
+    );
+    text(
+      "Stress is very forgiving. Take your time and explore!",
+      cx,
+      detailY + 22,
+    );
+  } else if (selKey === "level2") {
+    text(
+      "Stress builds fast. Calm zones are placed at the breaking point.",
+      cx,
+      detailY,
+    );
+    text("Manage your speed and path carefully to survive.", cx, detailY + 22);
+  } else if (selKey === "level3") {
+    text(
+      "Mandatory HIGH-STRESS corridors force your controls to invert.",
+      cx,
+      detailY,
+    );
+    text(
+      "You MUST navigate with reversed controls to progress. Good luck.",
+      cx,
+      detailY + 22,
+    );
   } else {
-    text('The classic experience. A random maze with random zone placement.', cx, detailY);
-    text('Every run is different. How fast can you escape?', cx, detailY + 22);
+    text(
+      "The classic experience. A random maze with random zone placement.",
+      cx,
+      detailY,
+    );
+    text("Every run is different. How fast can you escape?", cx, detailY + 22);
   }
 }
 
@@ -1464,14 +1665,14 @@ function drawInstructions() {
   textStyle(BOLD);
   textSize(40);
   fill(224);
-  text('HOW TO PLAY', cx, cy - 250);
+  text("HOW TO PLAY", cx, cy - 250);
 
   // Show current level
   const config = LEVEL_CONFIGS[gameMode];
   textSize(18);
-  if (gameMode === 'level1') fill(0, 255, 120);
-  else if (gameMode === 'level2') fill(255, 200, 0);
-  else if (gameMode === 'level3') fill(255, 60, 60);
+  if (gameMode === "level1") fill(0, 255, 120);
+  else if (gameMode === "level2") fill(255, 200, 0);
+  else if (gameMode === "level3") fill(255, 60, 60);
   else fill(100, 180, 255);
   text(config.name, cx, cy - 220);
 
@@ -1485,72 +1686,76 @@ function drawInstructions() {
   textStyle(BOLD);
   textSize(20);
   fill(0, 255, 120);
-  text('OBJECTIVE', leftX, cy - 175);
+  text("OBJECTIVE", leftX, cy - 175);
 
   textStyle(NORMAL);
   textSize(16);
   fill(190);
-  text('Reach the green exit at the end of the maze', leftX, cy - 150);
+  text("Reach the green exit at the end of the maze", leftX, cy - 150);
   text(`before the ${config.time}-second timer runs out.`, leftX, cy - 128);
 
   // --- Movement ---
   textStyle(BOLD);
   textSize(20);
   fill(100, 180, 255);
-  text('MOVEMENT', leftX, cy - 90);
+  text("MOVEMENT", leftX, cy - 90);
 
   textStyle(NORMAL);
   textSize(16);
   fill(190);
-  text('Arrow Keys / WASD to move', leftX, cy - 65);
-  text('Hold Shift to run (increases stress)', leftX, cy - 43);
-  text('A green arrow near you points toward the exit', leftX, cy - 21);
-  text('Press Z to zoom out (increases stress faster)', leftX, cy + 1);
+  text("Arrow Keys / WASD to move", leftX, cy - 65);
+  text("Hold Shift to run (increases stress)", leftX, cy - 43);
+  text("A green arrow near you points toward the exit", leftX, cy - 21);
+  text("Press Z to zoom out (increases stress faster)", leftX, cy + 1);
 
   // --- Zones ---
   textStyle(BOLD);
   textSize(20);
   fill(255, 200, 100);
-  text('ZONES', leftX, cy + 39);
+  text("ZONES", leftX, cy + 39);
 
   textStyle(NORMAL);
   textSize(16);
   fill(255, 200, 100);
   circle(leftX + 8, cy + 64, 14);
   fill(190);
-  text('Yellow glow = Calm Zone (reduces stress)', leftX + 22, cy + 64);
+  text("Yellow glow = Calm Zone (reduces stress)", leftX + 22, cy + 64);
 
   fill(200, 50, 50);
   circle(leftX + 8, cy + 89, 14);
   fill(190);
-  text('Red glow = Danger Zone (increases stress)', leftX + 22, cy + 89);
+  text("Red glow = Danger Zone (increases stress)", leftX + 22, cy + 89);
 
   fill(0, 200, 255);
   circle(leftX + 8, cy + 114, 14);
   fill(190);
-  text('Blue orb = Time Boost (+5 seconds)', leftX + 22, cy + 114);
+  text("Blue orb = Time Boost (+5 seconds)", leftX + 22, cy + 114);
 
   // High-stress zone info for Level 3
-  if (gameMode === 'level3') {
+  if (gameMode === "level3") {
     fill(200, 0, 200);
     circle(leftX + 8, cy + 139, 14);
     fill(190);
-    text('Purple pulse = HIGH-STRESS (controls WILL invert)', leftX + 22, cy + 139);
+    text(
+      "Purple pulse = HIGH-STRESS (controls WILL invert)",
+      leftX + 22,
+      cy + 139,
+    );
   }
 
   // --- Stress & Episodes ---
   textStyle(BOLD);
   textSize(20);
   fill(244, 67, 54);
-  const stressY = gameMode === 'level3' ? cy + 172 : cy + 152;
-  text('STRESS & EPISODES', leftX, stressY);
+  const stressY = gameMode === "level3" ? cy + 172 : cy + 152;
+  text("STRESS & EPISODES", leftX, stressY);
 
   textStyle(NORMAL);
   textSize(16);
   fill(190);
-  text('Stress rises over time, faster when running', leftX, stressY + 25);
-  text('or in danger zones. At 100% stress, an episode', leftX, stressY + 47);
-  text('triggers: controls invert and vision shrinks.', leftX, stressY + 69);
+  text("Stress rises over time, faster when running", leftX, stressY + 25);
+  text("or in danger zones. At 100% stress, an episode", leftX, stressY + 47);
+  text("triggers: controls invert and vision shrinks.", leftX, stressY + 69);
 
   // --- Start prompt ---
   textAlign(CENTER, CENTER);
@@ -1559,7 +1764,7 @@ function drawInstructions() {
     textStyle(BOLD);
     textSize(24);
     fill(255);
-    text('[ PRESS ENTER TO BEGIN ]', cx, height - 40);
+    text("[ PRESS ENTER TO BEGIN ]", cx, height - 40);
   }
 }
 
@@ -1770,14 +1975,10 @@ function drawGameplay() {
 
   // Follow player, clamping only when maze is larger than the screen.
   // When the maze fits inside the screen, center it instead.
-  let camX = MAZE_WIDTH > width
-    ? constrain(player.x - width / 2, 0, MAZE_WIDTH - width)
-    : -(width - MAZE_WIDTH) / 2;
-  let camY = MAZE_HEIGHT > height
-    ? constrain(player.y - height / 2, 0, MAZE_HEIGHT - height)
-    : -(height - MAZE_HEIGHT) / 2;
+  let camX = player.x - width / 2;
+  let camY = player.y - height / 2;
 
-  if (gameState === 'episode') {
+  if (gameState === "episode") {
     camX += screenShake.x;
     camY += screenShake.y;
   }
@@ -1798,7 +1999,7 @@ function drawGameplay() {
   // --- Pre-rendered maze texture ---
   const darken = stress / 100;
   if (mazeTexture) {
-    if (gameState === 'episode') {
+    if (gameState === "episode") {
       tint(200, 150, 150);
     } else {
       tint(255 - darken * 60);
@@ -1876,7 +2077,7 @@ function drawGameplay() {
     textAlign(CENTER, CENTER);
     textStyle(BOLD);
     textSize(14);
-    text('?', zx, zy + bob - 9);
+    text("?", zx, zy + bob - 9);
   }
 
   // --- Time boost pickups ---
@@ -1903,7 +2104,7 @@ function drawGameplay() {
     textAlign(CENTER, CENTER);
     textStyle(BOLD);
     textSize(10);
-    text('+5', bx, by + 1);
+    text("+5", bx, by + 1);
   }
 
   // --- End zone ---
@@ -1938,14 +2139,14 @@ function drawGameplay() {
   }
 
   // --- Episode overlay ---
-  if (gameState === 'episode') {
+  if (gameState === "episode") {
     drawEpisodeOverlay();
   }
 
   // --- Micro spike flash ---
   if (microSpikeActive > 0) {
     noStroke();
-    fill(255, 255, 255, (0.05 * microSpikeActive / 15) * 255);
+    fill(255, 255, 255, ((0.05 * microSpikeActive) / 15) * 255);
     rect(0, 0, width, height);
   }
 }
@@ -1986,7 +2187,7 @@ function drawTutorialPopup(sign) {
   textStyle(NORMAL);
   textSize(14);
   fill(220, 220, 220, 255 * alpha);
-  const lines = sign.message.split('\n');
+  const lines = sign.message.split("\n");
   for (let i = 0; i < lines.length; i++) {
     text(lines[i], width / 2, boxY + 50 + i * 20);
   }
@@ -2010,24 +2211,19 @@ function drawDirectionArrow() {
   const bob = sin(frameCount * 0.08) * 1.5;
 
   push();
-  translate(ax + cos(arrowAngle + HALF_PI) * bob, ay + sin(arrowAngle + HALF_PI) * bob);
+  translate(
+    ax + cos(arrowAngle + HALF_PI) * bob,
+    ay + sin(arrowAngle + HALF_PI) * bob,
+  );
   rotate(arrowAngle);
 
   const size = 8;
   noStroke();
   fill(0, 255, 120, 180);
-  triangle(
-    size, 0,
-    -size, -size * 0.6,
-    -size, size * 0.6
-  );
+  triangle(size, 0, -size, -size * 0.6, -size, size * 0.6);
 
   fill(255, 255, 255, 100);
-  triangle(
-    size * 0.5, 0,
-    -size * 0.3, -size * 0.25,
-    -size * 0.3, size * 0.25
-  );
+  triangle(size * 0.5, 0, -size * 0.3, -size * 0.25, -size * 0.3, size * 0.25);
   pop();
 }
 
@@ -2040,9 +2236,11 @@ function drawFog() {
   }
 
   const stressRatio = stress / 100;
-  let visRadius = BASE_VISIBILITY_RADIUS - stressRatio * (BASE_VISIBILITY_RADIUS - MIN_VISIBILITY_RADIUS);
+  let visRadius =
+    BASE_VISIBILITY_RADIUS -
+    stressRatio * (BASE_VISIBILITY_RADIUS - MIN_VISIBILITY_RADIUS);
 
-  if (gameState === 'episode') {
+  if (gameState === "episode") {
     visRadius = MIN_VISIBILITY_RADIUS * 0.8;
     visRadius += sin(frameCount * 0.2) * 10;
   }
@@ -2052,24 +2250,28 @@ function drawFog() {
   const fCtx = fogBuffer.drawingContext;
   fogBuffer.clear();
 
-  fCtx.fillStyle = '#000';
+  fCtx.fillStyle = "#000";
   fCtx.fillRect(0, 0, fogBuffer.width, fogBuffer.height);
 
-  fCtx.globalCompositeOperation = 'destination-out';
+  fCtx.globalCompositeOperation = "destination-out";
 
   const gradient = fCtx.createRadialGradient(
-    fogBuffer.width / 2, fogBuffer.height / 2, visRadius * 0.4,
-    fogBuffer.width / 2, fogBuffer.height / 2, visRadius
+    fogBuffer.width / 2,
+    fogBuffer.height / 2,
+    visRadius * 0.4,
+    fogBuffer.width / 2,
+    fogBuffer.height / 2,
+    visRadius,
   );
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-  gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.9)');
-  gradient.addColorStop(0.85, 'rgba(0, 0, 0, 0.3)');
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  gradient.addColorStop(0, "rgba(0, 0, 0, 1)");
+  gradient.addColorStop(0.6, "rgba(0, 0, 0, 0.9)");
+  gradient.addColorStop(0.85, "rgba(0, 0, 0, 0.3)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
   fCtx.fillStyle = gradient;
   fCtx.fillRect(0, 0, fogBuffer.width, fogBuffer.height);
 
-  fCtx.globalCompositeOperation = 'source-over';
+  fCtx.globalCompositeOperation = "source-over";
 
   image(fogBuffer, 0, 0);
 }
@@ -2091,7 +2293,7 @@ function drawHUD() {
   textSize(16);
   fill(170);
   noStroke();
-  text('STRESS', width / 2, barY - 14);
+  text("STRESS", width / 2, barY - 14);
 
   fill(40, 40, 40, 200);
   rect(barX, barY, barWidth, barHeight);
@@ -2122,7 +2324,7 @@ function drawHUD() {
   // --- Timer ---
   const minutes = Math.floor(timer / 60);
   const seconds = Math.floor(timer % 60);
-  const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const timeStr = `${minutes}:${seconds.toString().padStart(2, "0")}`;
 
   textAlign(CENTER, CENTER);
   if (timer < 15) {
@@ -2147,7 +2349,7 @@ function drawHUD() {
     fill(0, 200, 255, flashAlpha);
     textStyle(BOLD);
     textSize(22);
-    text('+5s', width / 2, flashY);
+    text("+5s", width / 2, flashY);
   }
 
   // --- Level name display ---
@@ -2160,54 +2362,60 @@ function drawHUD() {
 
   // --- Zone indicators ---
   const { r, c } = getPlayerCell();
-  const inCalmZone = calmZones.some(cz => cz.r === r && cz.c === c);
-  const inHighStressZone = highStressZones.some(hz => hz.r === r && hz.c === c);
+  const inCalmZone = calmZones.some((cz) => cz.r === r && cz.c === c);
+  const inHighStressZone = highStressZones.some(
+    (hz) => hz.r === r && hz.c === c,
+  );
 
   textAlign(CENTER, CENTER);
   if (inCalmZone) {
     textStyle(NORMAL);
     textSize(18);
     fill(255, 200, 100, 200);
-    text('~ Calm Zone ~', width / 2, padding + 60);
+    text("~ Calm Zone ~", width / 2, padding + 60);
   }
-  const inScaryZone = scaryZones.some(sz => sz.r === r && sz.c === c);
+  const inScaryZone = scaryZones.some((sz) => sz.r === r && sz.c === c);
   if (inScaryZone) {
     textStyle(NORMAL);
     textSize(18);
     fill(200, 50, 50, 200);
-    text('! Danger Zone !', width / 2, padding + 60);
+    text("! Danger Zone !", width / 2, padding + 60);
   }
   if (inHighStressZone) {
     const pulse = sin(frameCount * 0.15) > 0;
     textStyle(BOLD);
     textSize(20);
     fill(200, 0, 255, pulse ? 255 : 180);
-    text('!! HIGH STRESS AREA !!', width / 2, padding + 60);
+    text("!! HIGH STRESS AREA !!", width / 2, padding + 60);
     textStyle(NORMAL);
     textSize(14);
     fill(200, 150, 255, 200);
-    text('Controls will invert - stay focused!', width / 2, padding + 82);
+    text("Controls will invert - stay focused!", width / 2, padding + 82);
   }
 
   if (isZoomedOut) {
     textStyle(BOLD);
     textSize(18);
     fill(255, 170, 0, 200);
-    text('ZOOMED OUT (Stress +)', width / 2, padding + 100);
+    text("ZOOMED OUT (Stress +)", width / 2, padding + 100);
   }
 
   // --- Episode warning ---
-  if (gameState === 'episode') {
+  if (gameState === "episode") {
     if (sin(frameCount * 0.2) > 0) {
       textStyle(BOLD);
       textSize(26);
       fill(255, 23, 68);
-      text('!! EPISODE !!', width / 2, height / 2 - 65);
+      text("!! EPISODE !!", width / 2, height / 2 - 65);
     }
     textStyle(NORMAL);
     textSize(16);
     fill(204);
-    text('Controls inverted - Stop moving or find a calm zone', width / 2, height / 2 - 35);
+    text(
+      "Controls inverted - Stop moving or find a calm zone",
+      width / 2,
+      height / 2 - 35,
+    );
   }
 
   // --- Controls reminder ---
@@ -2215,7 +2423,11 @@ function drawHUD() {
   textStyle(BOLD);
   textSize(14);
   fill(255);
-  text('P = Pause | R = Restart | Shift = Run | Z = Zoom Out | ESC = Menu', padding, padding + 12);
+  text(
+    "P = Pause | R = Restart | Shift = Run | Z = Zoom Out | ESC = Menu",
+    padding,
+    padding + 12,
+  );
 }
 
 // ============================================================
@@ -2224,12 +2436,16 @@ function drawHUD() {
 function drawEpisodeOverlay() {
   const ctx = drawingContext;
   const gradient = ctx.createRadialGradient(
-    width / 2, height / 2, 50,
-    width / 2, height / 2, width / 2
+    width / 2,
+    height / 2,
+    50,
+    width / 2,
+    height / 2,
+    width / 2,
   );
-  gradient.addColorStop(0, 'rgba(50, 0, 0, 0)');
-  gradient.addColorStop(0.6, 'rgba(50, 0, 0, 0.3)');
-  gradient.addColorStop(1, 'rgba(20, 0, 0, 0.7)');
+  gradient.addColorStop(0, "rgba(50, 0, 0, 0)");
+  gradient.addColorStop(0.6, "rgba(50, 0, 0, 0.3)");
+  gradient.addColorStop(1, "rgba(20, 0, 0, 0.7)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
@@ -2252,12 +2468,12 @@ function drawPauseOverlay() {
   textStyle(BOLD);
   textSize(58);
   fill(224);
-  text('PAUSED', width / 2, height / 2 - 20);
+  text("PAUSED", width / 2, height / 2 - 20);
 
   textStyle(NORMAL);
   textSize(20);
   fill(170);
-  text('Press P to resume | R to restart', width / 2, height / 2 + 35);
+  text("Press P to resume | R to restart", width / 2, height / 2 + 35);
 }
 
 // ============================================================
@@ -2271,7 +2487,7 @@ function drawWinScreen() {
 
   noStroke();
   for (let i = 0; i < 40; i++) {
-    const angle = (frameCount * 0.02 + i * 0.16) % (TWO_PI);
+    const angle = (frameCount * 0.02 + i * 0.16) % TWO_PI;
     const d = 80 + sin(frameCount * 0.03 + i) * 40;
     const px = cx + cos(angle) * d;
     const py = cy - 50 + sin(angle) * d * 0.6;
@@ -2284,7 +2500,7 @@ function drawWinScreen() {
   textStyle(BOLD);
   textSize(62);
   fill(76, 175, 80);
-  text('YOU MADE IT', cx, cy - 50);
+  text("YOU MADE IT", cx, cy - 50);
 
   const timeLeft = Math.floor(timer);
   const config = LEVEL_CONFIGS[gameMode];
@@ -2292,19 +2508,19 @@ function drawWinScreen() {
   textSize(22);
   fill(170);
   text(`You reached the end with ${timeLeft} seconds to spare.`, cx, cy + 15);
-  text('You kept control through the chaos.', cx, cy + 48);
+  text("You kept control through the chaos.", cx, cy + 48);
 
   // Show level completed
   textSize(18);
-  if (gameMode === 'level1') fill(0, 255, 120);
-  else if (gameMode === 'level2') fill(255, 200, 0);
-  else if (gameMode === 'level3') fill(255, 60, 60);
+  if (gameMode === "level1") fill(0, 255, 120);
+  else if (gameMode === "level2") fill(255, 200, 0);
+  else if (gameMode === "level3") fill(255, 60, 60);
   else fill(100, 180, 255);
-  text(config.name + ' Complete!', cx, cy + 85);
+  text(config.name + " Complete!", cx, cy + 85);
 
   textSize(18);
   fill(102);
-  text('Press ENTER to return to menu | R to play again', cx, cy + 120);
+  text("Press ENTER to return to menu | R to play again", cx, cy + 120);
 }
 
 // ============================================================
@@ -2323,7 +2539,11 @@ function drawLoseScreen() {
 
   const glitch = Math.random() < 0.1;
   if (glitch) {
-    text("TIME'S UP", cx + (Math.random() - 0.5) * 8, cy - 50 + (Math.random() - 0.5) * 4);
+    text(
+      "TIME'S UP",
+      cx + (Math.random() - 0.5) * 8,
+      cy - 50 + (Math.random() - 0.5) * 4,
+    );
   } else {
     text("TIME'S UP", cx, cy - 50);
   }
@@ -2332,7 +2552,7 @@ function drawLoseScreen() {
   textSize(22);
   fill(170);
   text("You couldn't make it through in time.", cx, cy + 15);
-  text('The maze consumed you.', cx, cy + 48);
+  text("The maze consumed you.", cx, cy + 48);
 
   // Show level
   const config = LEVEL_CONFIGS[gameMode];
@@ -2342,5 +2562,5 @@ function drawLoseScreen() {
 
   textSize(18);
   fill(102);
-  text('Press ENTER to return to menu | R to try again', cx, cy + 110);
+  text("Press ENTER to return to menu | R to try again", cx, cy + 110);
 }
