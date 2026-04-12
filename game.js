@@ -1513,8 +1513,8 @@ function updatePlaying() {
     stress = constrain(stress, 0, 100);
 
     if (stress >= 100) {
-      // FTUE: Episode warning popup (first time only, before episode starts)
-      if (!ftueShownPopups.has("episode")) {
+      // FTUE: Episode warning popup (Level 1 only, first time only)
+      if (gameMode === "level1" && !ftueShownPopups.has("episode")) {
         triggerFtue("episode");
         return;
       }
