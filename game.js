@@ -26,6 +26,7 @@ const ZOOM_OUT_STRESS_RATE = 0.2;
 const ZOOM_OUT_VISIBILITY_MULT = 2.0;
 const WALL_THICKNESS = 6;
 const MORTAR_WIDTH = 2;
+const GAME_VIEWPORT_RATIO = 0.78;
 
 // ============================================================
 // LEVEL CONFIGURATIONS
@@ -70,24 +71,29 @@ const LEVEL_CONFIGS = {
 };
 
 // ============================================================
+// FTUE (First-Time User Experience) POPUP DEFINITIONS
+// ============================================================
+const FTUE_POPUPS = {
+  objective: { title: "FIND THE EXIT", message: "Follow the green arrow to the exit.\nReach it before time runs out!", color: [0, 255, 120] },
+  stress_bar: { title: "STRESS BAR", message: "Stress rises over time. Stand still to lower it.\nAt 100%, controls invert \u2014 an episode triggers!", color: [244, 67, 54] },
+  sprint: { title: "SPRINTING", message: "Hold SHIFT to run faster \u2014 but stress rises quickly.\nUse short bursts to save time.", color: [255, 152, 0] },
+  zoom: { title: "MAP ZOOM", message: "Hold Z to zoom out and see more maze.\nWarning: zooming increases stress!", color: [255, 170, 0] },
+  calm_zone: { title: "CALM ZONE", message: "Yellow areas reduce stress.\nPause here to recover before moving on.", color: [255, 200, 100] },
+  scary_zone: { title: "DANGER ZONE", message: "Red areas spike your stress.\nPass through quickly or find another route!", color: [200, 50, 50] },
+  high_stress: { title: "HIGH-STRESS CORRIDOR", message: "Purple zones spike stress to episode levels.\nBrace yourself \u2014 controls WILL invert.", color: [200, 0, 255] },
+  time_boost: { title: "TIME BOOST", message: "Blue orbs add +5 seconds.\nCollect them to buy more time!", color: [0, 200, 255] },
+  episode: { title: "EPISODE!", message: "Stress hit 100%! Controls are now inverted.\nStay calm \u2014 stop moving or find a calm zone.", color: [255, 23, 68] },
+};
+
+// ============================================================
 // GAME STATE
 // ============================================================
 let gameState = "menu"; // menu, charSelect, levelSelect, instructions, playing, paused, episode, win, lose
 let gameMode = "random"; // random, level1, level2, level3
 let levelSelectIndex = 0;
 const levelOptions = ["level1", "level2", "level3", "random"];
-let selectedChar = 0;
+let selectedChar = 1; // Default to Wolf (balanced, center)
 const characters = [
-  {
-    name: "Knight",
-    color: "#8a9bb2",
-    accent: "#5a6880",
-    speedMult: 1.3,
-    stressMult: 1.4,
-    trait: "Fast but anxious",
-    spdDesc: "Moves 30% faster",
-    strDesc: "Stress rises 40% faster",
-  },
   {
     name: "Mage",
     color: "#8b6b4a",
@@ -97,6 +103,7 @@ const characters = [
     trait: "Slow but calm",
     spdDesc: "Moves 20% slower",
     strDesc: "Stress rises 35% slower",
+    drawFn: "mage",
   },
   {
     name: "Wolf",
@@ -107,6 +114,18 @@ const characters = [
     trait: "Balanced",
     spdDesc: "Normal speed",
     strDesc: "Normal stress rate",
+    drawFn: "wolf",
+  },
+  {
+    name: "Knight",
+    color: "#8a9bb2",
+    accent: "#5a6880",
+    speedMult: 1.3,
+    stressMult: 1.4,
+    trait: "Fast but anxious",
+    spdDesc: "Moves 30% faster",
+    strDesc: "Stress rises 40% faster",
+    drawFn: "knight",
   },
 ];
 
@@ -141,9 +160,11 @@ let timeBoosts = [];
 const TIME_BOOST_AMOUNT = 5;
 let timeBoostFlash = 0;
 let isZoomedOut = false;
-let activeTutorialSign = null; // currently displayed tutorial sign
-let tutorialSignTimer = 0;
-let shownSigns = new Set(); // track which signs the player has already seen
+// FTUE popup state (persists across level transitions)
+let ftueShownPopups = new Set();
+let activeFtuePopup = null;
+let ftueActive = false;
+let hasMovedEver = false;
 
 // Player animation state
 let playerAnimFrame = 0;
@@ -160,6 +181,11 @@ let menuBgImage;
 
 // p5.js fog buffer
 let fogBuffer;
+
+// Viewport layout (computed on resize)
+let gameViewportW = 0;
+let sidebarX = 0;
+let sidebarW = 0;
 
 // ============================================================
 // AUDIO (procedural - Web Audio API, not p5 sound)
@@ -216,6 +242,169 @@ function playStepSound() {
 }
 
 // ============================================================
+// PROCEDURAL BACKGROUND MUSIC
+// ============================================================
+let bgMusicPlaying = false;
+let bgMusicNodes = [];
+let bgMusicInterval = null;
+let bgMusicMasterGain = null;
+let bgMusicArpSpeed = 2000;
+let bgMusicCurrentMood = "low"; // low, medium, high, episode
+
+function startBgMusic() {
+  if (bgMusicPlaying) return;
+  try {
+    const ctx = getAudioCtx();
+    bgMusicPlaying = true;
+
+    // Master gain for overall volume control
+    bgMusicMasterGain = ctx.createGain();
+    bgMusicMasterGain.gain.setValueAtTime(0.06, ctx.currentTime);
+    bgMusicMasterGain.connect(ctx.destination);
+
+    // Drone layer: two slightly detuned sine waves for beat frequency
+    const drone1 = ctx.createOscillator();
+    const drone1Gain = ctx.createGain();
+    drone1.type = "sine";
+    drone1.frequency.value = 55;
+    drone1Gain.gain.value = 0.4;
+    drone1.connect(drone1Gain);
+    drone1Gain.connect(bgMusicMasterGain);
+    drone1.start();
+    bgMusicNodes.push({ osc: drone1, gain: drone1Gain });
+
+    const drone2 = ctx.createOscillator();
+    const drone2Gain = ctx.createGain();
+    drone2.type = "sine";
+    drone2.frequency.value = 55.5;
+    drone2Gain.gain.value = 0.35;
+    drone2.connect(drone2Gain);
+    drone2Gain.connect(bgMusicMasterGain);
+    drone2.start();
+    bgMusicNodes.push({ osc: drone2, gain: drone2Gain });
+
+    // Pad layer: minor chord with triangle waves
+    const padNotes = [110, 131, 165]; // A2, C3, E3
+    for (const freq of padNotes) {
+      const pad = ctx.createOscillator();
+      const padGain = ctx.createGain();
+      pad.type = "triangle";
+      pad.frequency.value = freq;
+      padGain.gain.value = 0.15;
+      pad.connect(padGain);
+      padGain.connect(bgMusicMasterGain);
+      pad.start();
+      bgMusicNodes.push({ osc: pad, gain: padGain });
+
+      // LFO for breathing effect
+      const lfo = ctx.createOscillator();
+      const lfoGain = ctx.createGain();
+      lfo.type = "sine";
+      lfo.frequency.value = 0.15 + Math.random() * 0.1;
+      lfoGain.gain.value = 0.08;
+      lfo.connect(lfoGain);
+      lfoGain.connect(padGain.gain);
+      lfo.start();
+      bgMusicNodes.push({ osc: lfo, gain: lfoGain });
+    }
+
+    // Arpeggio layer: sequenced notes from dark minor pentatonic
+    const arpNotes = [110, 131, 147, 165, 196]; // A2, C3, D3, E3, G3
+    let arpIndex = 0;
+    bgMusicArpSpeed = 2000;
+    const playArpNote = () => {
+      if (!bgMusicPlaying) return;
+      try {
+        const c = getAudioCtx();
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = "sine";
+        osc.frequency.value = arpNotes[arpIndex % arpNotes.length];
+        gain.gain.setValueAtTime(0.12, c.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 1.5);
+        osc.connect(gain);
+        gain.connect(bgMusicMasterGain);
+        osc.start();
+        osc.stop(c.currentTime + 1.5);
+        arpIndex++;
+      } catch (e) { /* ignore */ }
+      bgMusicInterval = setTimeout(playArpNote, bgMusicArpSpeed);
+    };
+    bgMusicInterval = setTimeout(playArpNote, 1000);
+
+  } catch (e) { /* ignore audio errors */ }
+}
+
+function stopBgMusic() {
+  if (!bgMusicPlaying) return;
+  bgMusicPlaying = false;
+
+  if (bgMusicInterval) {
+    clearTimeout(bgMusicInterval);
+    bgMusicInterval = null;
+  }
+
+  try {
+    const ctx = getAudioCtx();
+    // Fade out over 0.5s
+    for (const node of bgMusicNodes) {
+      try {
+        node.gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        node.osc.stop(ctx.currentTime + 0.6);
+      } catch (e) { /* already stopped */ }
+    }
+    if (bgMusicMasterGain) {
+      bgMusicMasterGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    }
+  } catch (e) { /* ignore */ }
+
+  bgMusicNodes = [];
+  bgMusicMasterGain = null;
+}
+
+function updateBgMusicMood(stressLevel, inEpisode) {
+  if (!bgMusicPlaying || !bgMusicMasterGain) return;
+
+  let newMood;
+  if (inEpisode) newMood = "episode";
+  else if (stressLevel > 70) newMood = "high";
+  else if (stressLevel > 40) newMood = "medium";
+  else newMood = "low";
+
+  if (newMood === bgMusicCurrentMood) return;
+  bgMusicCurrentMood = newMood;
+
+  try {
+    const ctx = getAudioCtx();
+    const t = ctx.currentTime;
+
+    if (newMood === "low") {
+      bgMusicMasterGain.gain.exponentialRampToValueAtTime(0.06, t + 1);
+      bgMusicArpSpeed = 2000;
+      // Reset drone frequencies
+      if (bgMusicNodes[0]) bgMusicNodes[0].osc.frequency.exponentialRampToValueAtTime(55, t + 1);
+      if (bgMusicNodes[1]) bgMusicNodes[1].osc.frequency.exponentialRampToValueAtTime(55.5, t + 1);
+    } else if (newMood === "medium") {
+      bgMusicMasterGain.gain.exponentialRampToValueAtTime(0.08, t + 1);
+      bgMusicArpSpeed = 1500;
+      if (bgMusicNodes[0]) bgMusicNodes[0].osc.frequency.exponentialRampToValueAtTime(58, t + 1);
+      if (bgMusicNodes[1]) bgMusicNodes[1].osc.frequency.exponentialRampToValueAtTime(58.5, t + 1);
+    } else if (newMood === "high") {
+      bgMusicMasterGain.gain.exponentialRampToValueAtTime(0.1, t + 1);
+      bgMusicArpSpeed = 1000;
+      if (bgMusicNodes[0]) bgMusicNodes[0].osc.frequency.exponentialRampToValueAtTime(62, t + 1);
+      if (bgMusicNodes[1]) bgMusicNodes[1].osc.frequency.exponentialRampToValueAtTime(63, t + 1);
+    } else if (newMood === "episode") {
+      bgMusicMasterGain.gain.exponentialRampToValueAtTime(0.12, t + 0.5);
+      bgMusicArpSpeed = 600;
+      // Dissonant detune during episode
+      if (bgMusicNodes[0]) bgMusicNodes[0].osc.frequency.exponentialRampToValueAtTime(50, t + 0.3);
+      if (bgMusicNodes[1]) bgMusicNodes[1].osc.frequency.exponentialRampToValueAtTime(67, t + 0.3);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ============================================================
 // BFS SOLVER - find shortest path through maze
 // ============================================================
 function solveMaze(startR, startC, endR, endC) {
@@ -259,9 +448,20 @@ function solveMaze(startR, startC, endR, endC) {
 }
 
 // ============================================================
+// SEEDED PRNG (for deterministic maze generation)
+// ============================================================
+let _seed = null;
+function mazePrng() {
+  if (_seed === null) return Math.random();
+  _seed = (_seed * 16807) % 2147483647;
+  return (_seed - 1) / 2147483646;
+}
+
+// ============================================================
 // MAZE GENERATION (Recursive Backtracker)
 // ============================================================
-function generateMaze() {
+function generateMaze(rngFn) {
+  if (!rngFn) rngFn = Math.random;
   maze = [];
   for (let r = 0; r < MAZE_ROWS; r++) {
     maze[r] = [];
@@ -294,7 +494,8 @@ function generateMaze() {
       neighbors.push({ r, c: c - 1, dir: "left" });
 
     if (neighbors.length > 0) {
-      const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+      const idx = Math.floor(rngFn() * neighbors.length);
+      const next = neighbors[Math.min(idx, neighbors.length - 1)];
       if (next.dir === "top") {
         maze[r][c].top = false;
         maze[next.r][next.c].bottom = false;
@@ -439,50 +640,7 @@ function setupLevel1() {
   generateDecorations();
 
   highStressZones = [];
-
-  // Tutorial signs placed at key locations along the path
-  tutorialSigns = [
-    {
-      r: path[Math.min(2, path.length - 1)].r,
-      c: path[Math.min(2, path.length - 1)].c,
-      title: "OBJECTIVE",
-      message:
-        "Reach the GREEN EXIT before time runs out!\nFollow the green arrow - it points the way.",
-      color: [0, 255, 120],
-    },
-    {
-      r: path[Math.min(pathStep, path.length - 1)].r,
-      c: path[Math.min(pathStep, path.length - 1)].c,
-      title: "STRESS BAR",
-      message:
-        "Watch the bar at the bottom - stress rises over time.\nStand still to calm down slightly.",
-      color: [244, 67, 54],
-    },
-    {
-      r: calmZones[0].r,
-      c: calmZones[0].c,
-      title: "CALM ZONE",
-      message:
-        "Yellow glowing areas REDUCE your stress.\nStay here to recover before moving on!",
-      color: [255, 200, 100],
-    },
-    {
-      r: path[Math.min(pathStep * 2, path.length - 1)].r,
-      c: path[Math.min(pathStep * 2, path.length - 1)].c,
-      title: "RUNNING & ZOOM",
-      message:
-        "Hold SHIFT to run faster (more stress!).\nPress Z to zoom out and see more (also stressful!).",
-      color: [100, 180, 255],
-    },
-    {
-      r: path[Math.min(pathStep * 3, path.length - 1)].r,
-      c: path[Math.min(pathStep * 3, path.length - 1)].c,
-      title: "DANGER ZONES",
-      message:
-        "Red glowing areas INCREASE stress faster.\nAvoid them or pass through quickly!",
-      color: [200, 50, 50],
-    },
-  ];
+  tutorialSigns = [];
 }
 
 function setupLevel2() {
@@ -569,20 +727,23 @@ function setupLevel2() {
 
 function setupLevel3() {
   // The Gauntlet: 25x25 with mandatory high-stress corridors
-  generateMaze();
+  // Use seeded PRNG for deterministic "Hard Mode" maze
+  _seed = 42;
+  generateMaze(mazePrng);
+  _seed = null;
   placePlayerAndExit();
 
   const path = solveMaze(0, 0, MAZE_ROWS - 1, MAZE_COLS - 1);
 
   // Place 3 mandatory high-stress corridors along the solution path
-  // These are stretches of 4-6 cells where stress skyrockets
+  // Fixed corridor lengths for consistent Hard Mode difficulty
   highStressZones = [];
   const segmentLength = Math.floor(path.length / 4);
+  const corridorLengths = [5, 6, 4]; // curated: medium, long, short
 
   for (let seg = 0; seg < 3; seg++) {
     const startIdx = segmentLength * (seg + 1) - 3;
-    const corridorLength = 4 + Math.floor(Math.random() * 3); // 4-6 cells
-    for (let j = 0; j < corridorLength; j++) {
+    for (let j = 0; j < corridorLengths[seg]; j++) {
       const idx = Math.min(startIdx + j, path.length - 2);
       highStressZones.push({ r: path[idx].r, c: path[idx].c });
     }
@@ -592,9 +753,8 @@ function setupLevel3() {
   calmZones = [];
   for (let seg = 0; seg < 3; seg++) {
     const startIdx = segmentLength * (seg + 1) - 3;
-    const corridorLength = 4 + Math.floor(Math.random() * 3);
     const recoveryIdx = Math.min(
-      startIdx + corridorLength + 1,
+      startIdx + corridorLengths[seg] + 1,
       path.length - 2,
     );
     calmZones.push({ r: path[recoveryIdx].r, c: path[recoveryIdx].c });
@@ -607,38 +767,26 @@ function setupLevel3() {
     calmZones.push({ r: path[prepIdx].r, c: path[prepIdx].c });
   }
 
-  // A few extra calm zones scattered off-path
-  for (let i = 0; i < 2; i++) {
-    let cr, cc;
-    do {
-      cr = Math.floor(Math.random() * MAZE_ROWS);
-      cc = Math.floor(Math.random() * MAZE_COLS);
-    } while (
-      (cr === 0 && cc === 0) ||
-      (cr === MAZE_ROWS - 1 && cc === MAZE_COLS - 1) ||
-      highStressZones.some((hz) => hz.r === cr && hz.c === cc)
-    );
-    calmZones.push({ r: cr, c: cc });
-  }
+  // Fixed extra calm zones at deterministic positions
+  calmZones.push({ r: Math.floor(MAZE_ROWS / 4), c: Math.floor(MAZE_COLS / 4) });
+  calmZones.push({ r: Math.floor(MAZE_ROWS * 3 / 4), c: Math.floor(MAZE_COLS * 3 / 4) });
 
-  // Scary zones scattered around (not on path or high-stress zones)
+  // Scary zones at fixed positions (not on path or high-stress zones)
   scaryZones = [];
   const pathSet = new Set(path.map((p) => `${p.r},${p.c}`));
   const hsSet = new Set(highStressZones.map((h) => `${h.r},${h.c}`));
-  for (let i = 0; i < 10; i++) {
-    let sr, sc;
-    let attempts = 0;
-    do {
-      sr = Math.floor(Math.random() * MAZE_ROWS);
-      sc = Math.floor(Math.random() * MAZE_COLS);
-      attempts++;
-    } while (
-      attempts < 100 &&
-      ((sr === 0 && sc === 0) ||
-        calmZones.some((cz) => cz.r === sr && cz.c === sc) ||
-        hsSet.has(`${sr},${sc}`))
-    );
-    if (attempts < 100) scaryZones.push({ r: sr, c: sc });
+  const calmSet = new Set(calmZones.map((cz) => `${cz.r},${cz.c}`));
+  // Deterministic scary zone positions spread across the maze
+  const scaryPositions = [
+    { r: 2, c: 3 }, { r: 5, c: 8 }, { r: 3, c: 15 }, { r: 8, c: 20 },
+    { r: 12, c: 5 }, { r: 14, c: 14 }, { r: 18, c: 3 }, { r: 20, c: 10 },
+    { r: 22, c: 18 }, { r: 16, c: 22 },
+  ];
+  for (const sp of scaryPositions) {
+    const key = `${sp.r},${sp.c}`;
+    if (!hsSet.has(key) && !calmSet.has(key) && sp.r < MAZE_ROWS && sp.c < MAZE_COLS) {
+      scaryZones.push(sp);
+    }
   }
 
   findNarrowZones();
@@ -1009,6 +1157,14 @@ function getPlayerCell() {
   };
 }
 
+function triggerFtue(key) {
+  if (gameMode !== "level1") return;
+  if (ftueShownPopups.has(key) || activeFtuePopup !== null) return;
+  ftueShownPopups.add(key);
+  activeFtuePopup = { ...FTUE_POPUPS[key], key };
+  ftueActive = true;
+}
+
 function canMove(nx, ny) {
   const halfSize = PLAYER_SIZE / 2;
   const corners = [
@@ -1062,17 +1218,34 @@ function setup() {
   fogBuffer = createGraphics(windowWidth, windowHeight);
   textFont("Courier New");
   lastTime = millis();
+  updateLayout();
 }
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   fogBuffer.resizeCanvas(windowWidth, windowHeight);
+  updateLayout();
+}
+
+function updateLayout() {
+  gameViewportW = Math.floor(width * GAME_VIEWPORT_RATIO);
+  sidebarX = gameViewportW;
+  sidebarW = width - gameViewportW;
 }
 
 // ============================================================
 // p5.js INPUT
 // ============================================================
 function keyPressed() {
+  // FTUE popup dismissal
+  if (ftueActive && activeFtuePopup) {
+    if (key === ' ') {
+      activeFtuePopup = null;
+      ftueActive = false;
+    }
+    return false;
+  }
+
   if (key === "Enter") {
     if (gameState === "menu") {
       gameState = "charSelect";
@@ -1140,6 +1313,7 @@ function keyPressed() {
       gameState === "episode" ||
       gameState === "paused"
     ) {
+      stopBgMusic();
       gameState = "menu";
     }
   }
@@ -1176,11 +1350,13 @@ function startGame() {
   controlsInverted = false;
   microSpikeActive = 0;
   screenShake = { x: 0, y: 0 };
-  activeTutorialSign = null;
-  tutorialSignTimer = 0;
-  shownSigns = new Set();
+  activeFtuePopup = null;
+  ftueActive = false;
+  hasMovedEver = false;
+  // Note: ftueShownPopups is NOT reset — persists across levels
   gameState = "playing";
   lastTime = millis();
+  startBgMusic();
 }
 
 // ============================================================
@@ -1200,11 +1376,21 @@ function updateGame() {
 function updatePlaying() {
   const config = LEVEL_CONFIGS[gameMode];
 
+  // Freeze gameplay while FTUE popup is active
+  if (ftueActive) return;
+
+  // FTUE: Objective popup on first frame
+  if (timer >= GAME_TIME - 0.1) {
+    triggerFtue("objective");
+    if (ftueActive) return;
+  }
+
   // Timer
   timer -= dt;
   if (timer <= 0) {
     timer = 0;
     gameState = "lose";
+    stopBgMusic();
     playLoseSound();
     return;
   }
@@ -1237,6 +1423,25 @@ function updatePlaying() {
   const ch = characters[selectedChar];
   let spd = (isRunning ? RUN_SPEED : PLAYER_SPEED) * ch.speedMult;
   const isMoving = dx !== 0 || dy !== 0;
+
+  // FTUE: Stress bar popup on first movement
+  if (isMoving && !hasMovedEver) {
+    hasMovedEver = true;
+    triggerFtue("stress_bar");
+    if (ftueActive) return;
+  }
+
+  // FTUE: Sprint popup
+  if (isRunning && isMoving) {
+    triggerFtue("sprint");
+    if (ftueActive) return;
+  }
+
+  // FTUE: Zoom popup
+  if (isZoomedOut) {
+    triggerFtue("zoom");
+    if (ftueActive) return;
+  }
 
   if (gameState === "episode") {
     spd *= 0.5;
@@ -1277,21 +1482,10 @@ function updatePlaying() {
     (hz) => hz.r === r && hz.c === c,
   );
 
-  // Tutorial sign detection (Level 1)
-  if (tutorialSigns.length > 0) {
-    const nearSign = tutorialSigns.find((ts) => ts.r === r && ts.c === c);
-    if (nearSign && !shownSigns.has(`${nearSign.r},${nearSign.c}`)) {
-      activeTutorialSign = nearSign;
-      tutorialSignTimer = 180; // 3 seconds at 60fps
-      shownSigns.add(`${nearSign.r},${nearSign.c}`);
-    }
-  }
-  if (tutorialSignTimer > 0) {
-    tutorialSignTimer--;
-    if (tutorialSignTimer <= 0) {
-      activeTutorialSign = null;
-    }
-  }
+  // FTUE: Zone-specific popups
+  if (inCalmZone) { triggerFtue("calm_zone"); if (ftueActive) return; }
+  if (inScaryZone) { triggerFtue("scary_zone"); if (ftueActive) return; }
+  if (inHighStressZone) { triggerFtue("high_stress"); if (ftueActive) return; }
 
   // Stress calculation
   if (gameState !== "episode") {
@@ -1319,6 +1513,11 @@ function updatePlaying() {
     stress = constrain(stress, 0, 100);
 
     if (stress >= 100) {
+      // FTUE: Episode warning popup (first time only, before episode starts)
+      if (!ftueShownPopups.has("episode")) {
+        triggerFtue("episode");
+        return;
+      }
       gameState = "episode";
       controlsInverted = true;
       episodeDuration = 5;
@@ -1341,6 +1540,11 @@ function updatePlaying() {
   if (microSpikeActive > 0) microSpikeActive--;
   if (timeBoostFlash > 0) timeBoostFlash--;
 
+  // Update background music mood (~once per second)
+  if (frameCount % 60 === 0) {
+    updateBgMusicMood(stress, gameState === "episode");
+  }
+
   // Time boost collection
   const { r: pr, c: pc } = getPlayerCell();
   for (const tb of timeBoosts) {
@@ -1350,6 +1554,7 @@ function updatePlaying() {
       timeBoostFlash = 60;
       playTone(660, 0.15, "sine", 0.2);
       playTone(880, 0.15, "sine", 0.15);
+      triggerFtue("time_boost");
     }
   }
 
@@ -1357,6 +1562,7 @@ function updatePlaying() {
   const distToEnd = dist(player.x, player.y, endPos.x, endPos.y);
   if (distToEnd < CELL_SIZE / 2) {
     gameState = "win";
+    stopBgMusic();
     playWinSound();
   }
 }
@@ -1426,7 +1632,7 @@ function drawMenu() {
   text("LOST CONTROL", cx, cy - 120);
 
   textStyle(NORMAL);
-  textSize(22);
+  textSize(24);
   fill(180);
   text("An Epilepsy Awareness Experience", cx, cy - 65);
 
@@ -1435,7 +1641,7 @@ function drawMenu() {
     text("An Epilepsy Awareness Experience", cx, cy - 65);
   }
 
-  textSize(20);
+  textSize(22);
   fill(200);
   text("You are on a journey but terrified of what's to come.", cx, cy + 10);
   text("Navigate the maze before time runs out.", cx, cy + 40);
@@ -1444,13 +1650,13 @@ function drawMenu() {
   const blink = sin(frameCount * 0.08) > 0;
   if (blink) {
     textStyle(BOLD);
-    textSize(28);
+    textSize(32);
     fill(255);
     text("[ PRESS ENTER TO START ]", cx, cy + 140);
   }
 
   textStyle(NORMAL);
-  textSize(16);
+  textSize(18);
   fill(150);
   text(
     "WASD / Arrow Keys = Move  |  Shift = Run  |  P = Pause  |  R = Restart",
@@ -1470,12 +1676,12 @@ function drawCharSelect() {
 
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
-  textSize(44);
+  textSize(48);
   fill(224);
   text("CHOOSE YOUR CHARACTER", cx, cy - 130);
 
   textStyle(NORMAL);
-  textSize(18);
+  textSize(22);
   fill(136);
   text("Use LEFT / RIGHT arrow keys to select, ENTER to confirm", cx, cy - 85);
 
@@ -1509,26 +1715,27 @@ function drawCharSelect() {
     translate(x, y - 15);
     scale(1.8);
     const previewFrame = floor(frameCount / 20) % 3;
-    if (i === 0) drawKnight(previewFrame);
-    else if (i === 1) drawMage(previewFrame);
-    else if (i === 2) drawWolf(previewFrame);
+    const df = characters[i].drawFn;
+    if (df === "knight") drawKnight(previewFrame);
+    else if (df === "mage") drawMage(previewFrame);
+    else if (df === "wolf") drawWolf(previewFrame);
     pop();
 
     textAlign(CENTER, CENTER);
     textStyle(selected ? BOLD : NORMAL);
-    textSize(20);
+    textSize(24);
     fill(selected ? 255 : 136);
     text(ch.name, x, y + 52);
 
     textStyle(NORMAL);
-    textSize(13);
+    textSize(16);
     fill(selected ? 200 : 120);
-    text(ch.trait, x, y + 72);
+    text(ch.trait, x, y + 74);
 
-    textSize(11);
+    textSize(14);
     fill(selected ? 170 : 100);
-    text(ch.spdDesc, x, y + 90);
-    text(ch.strDesc, x, y + 105);
+    text(ch.spdDesc, x, y + 94);
+    text(ch.strDesc, x, y + 112);
   }
 }
 
@@ -1543,12 +1750,12 @@ function drawLevelSelect() {
 
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
-  textSize(44);
+  textSize(48);
   fill(224);
   text("SELECT LEVEL", cx, cy - 200);
 
   textStyle(NORMAL);
-  textSize(18);
+  textSize(22);
   fill(136);
   text("Use UP / DOWN to select, ENTER to confirm", cx, cy - 160);
 
@@ -1577,7 +1784,7 @@ function drawLevelSelect() {
     // Level name
     textAlign(CENTER, CENTER);
     textStyle(BOLD);
-    textSize(22);
+    textSize(26);
 
     // Color code each level
     if (key === "level1") {
@@ -1593,12 +1800,12 @@ function drawLevelSelect() {
 
     // Description
     textStyle(NORMAL);
-    textSize(14);
+    textSize(17);
     fill(selected ? 200 : 120);
     text(
       `${config.description}  |  ${config.cols}x${config.rows} maze  |  ${config.time}s`,
       cx,
-      y + 15,
+      y + 17,
     );
   }
 
@@ -1609,7 +1816,7 @@ function drawLevelSelect() {
   const detailY = startY + levelOptions.length * optionHeight + 30;
   textAlign(CENTER, CENTER);
   textStyle(NORMAL);
-  textSize(16);
+  textSize(18);
   fill(170);
 
   if (selKey === "level1") {
@@ -1659,113 +1866,80 @@ function drawInstructions() {
 
   const cx = width / 2;
   const cy = height / 2;
-  const leftX = cx - 220;
+  const config = LEVEL_CONFIGS[gameMode];
 
+  // Level name with color
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
-  textSize(40);
-  fill(224);
-  text("HOW TO PLAY", cx, cy - 250);
-
-  // Show current level
-  const config = LEVEL_CONFIGS[gameMode];
-  textSize(18);
+  textSize(44);
   if (gameMode === "level1") fill(0, 255, 120);
   else if (gameMode === "level2") fill(255, 200, 0);
   else if (gameMode === "level3") fill(255, 60, 60);
   else fill(100, 180, 255);
-  text(config.name, cx, cy - 220);
+  text(config.name, cx, cy - 120);
+
+  textSize(28);
+  fill(224);
+  text("READY?", cx, cy - 75);
 
   stroke(60);
   strokeWeight(1);
-  line(cx - 200, cy - 205, cx + 200, cy - 205);
+  line(cx - 180, cy - 55, cx + 180, cy - 55);
   noStroke();
 
-  // --- Objective ---
-  textAlign(LEFT, CENTER);
-  textStyle(BOLD);
-  textSize(20);
-  fill(0, 255, 120);
-  text("OBJECTIVE", leftX, cy - 175);
+  // Concise bullet points with colored indicators
+  const bullets = [
+    { dot: [0, 255, 120], text: "Reach the green exit before time runs out" },
+    { dot: [244, 67, 54], text: "Stress rises over time \u2014 manage it or lose control" },
+    { dot: [255, 200, 100], text: "Yellow zones heal \u00B7 Red zones hurt \u00B7 Blue orbs add time" },
+    { dot: [100, 180, 255], text: "Tips will appear as you discover new mechanics" },
+  ];
 
-  textStyle(NORMAL);
-  textSize(16);
-  fill(190);
-  text("Reach the green exit at the end of the maze", leftX, cy - 150);
-  text(`before the ${config.time}-second timer runs out.`, leftX, cy - 128);
-
-  // --- Movement ---
-  textStyle(BOLD);
-  textSize(20);
-  fill(100, 180, 255);
-  text("MOVEMENT", leftX, cy - 90);
-
-  textStyle(NORMAL);
-  textSize(16);
-  fill(190);
-  text("Arrow Keys / WASD to move", leftX, cy - 65);
-  text("Hold Shift to run (increases stress)", leftX, cy - 43);
-  text("A green arrow near you points toward the exit", leftX, cy - 21);
-  text("Press Z to zoom out (increases stress faster)", leftX, cy + 1);
-
-  // --- Zones ---
-  textStyle(BOLD);
-  textSize(20);
-  fill(255, 200, 100);
-  text("ZONES", leftX, cy + 39);
-
-  textStyle(NORMAL);
-  textSize(16);
-  fill(255, 200, 100);
-  circle(leftX + 8, cy + 64, 14);
-  fill(190);
-  text("Yellow glow = Calm Zone (reduces stress)", leftX + 22, cy + 64);
-
-  fill(200, 50, 50);
-  circle(leftX + 8, cy + 89, 14);
-  fill(190);
-  text("Red glow = Danger Zone (increases stress)", leftX + 22, cy + 89);
-
-  fill(0, 200, 255);
-  circle(leftX + 8, cy + 114, 14);
-  fill(190);
-  text("Blue orb = Time Boost (+5 seconds)", leftX + 22, cy + 114);
-
-  // High-stress zone info for Level 3
-  if (gameMode === "level3") {
-    fill(200, 0, 200);
-    circle(leftX + 8, cy + 139, 14);
-    fill(190);
-    text(
-      "Purple pulse = HIGH-STRESS (controls WILL invert)",
-      leftX + 22,
-      cy + 139,
-    );
+  const bulletStartY = cy - 25;
+  for (let i = 0; i < bullets.length; i++) {
+    const by = bulletStartY + i * 36;
+    // Colored dot
+    noStroke();
+    fill(bullets[i].dot[0], bullets[i].dot[1], bullets[i].dot[2]);
+    circle(cx - 240, by, 10);
+    // Bullet text
+    textAlign(LEFT, CENTER);
+    textStyle(NORMAL);
+    textSize(18);
+    fill(200);
+    text(bullets[i].text, cx - 225, by);
   }
 
-  // --- Stress & Episodes ---
-  textStyle(BOLD);
-  textSize(20);
-  fill(244, 67, 54);
-  const stressY = gameMode === "level3" ? cy + 172 : cy + 152;
-  text("STRESS & EPISODES", leftX, stressY);
-
-  textStyle(NORMAL);
-  textSize(16);
-  fill(190);
-  text("Stress rises over time, faster when running", leftX, stressY + 25);
-  text("or in danger zones. At 100% stress, an episode", leftX, stressY + 47);
-  text("triggers: controls invert and vision shrinks.", leftX, stressY + 69);
-
-  // --- Start prompt ---
+  // Level-specific one-liner
+  const tipY = bulletStartY + bullets.length * 36 + 30;
   textAlign(CENTER, CENTER);
+  textStyle(NORMAL);
+  textSize(18);
+  fill(150);
+  if (gameMode === "level1") {
+    text("A gentle start. Take your time to learn.", cx, tipY);
+  } else if (gameMode === "level2") {
+    text("Stress builds fast. Manage your path carefully.", cx, tipY);
+  } else if (gameMode === "level3") {
+    text("Purple corridors WILL push you into episodes.", cx, tipY);
+  } else {
+    text("Every maze is different. Good luck.", cx, tipY);
+  }
+
+  // Start prompt
   const blink = sin(frameCount * 0.08) > 0;
   if (blink) {
     textStyle(BOLD);
-    textSize(24);
+    textSize(28);
     fill(255);
-    text("[ PRESS ENTER TO BEGIN ]", cx, height - 40);
+    text("[ PRESS ENTER TO BEGIN ]", cx, height - 50);
   }
+
+  // Back hint
+  textStyle(NORMAL);
+  textSize(14);
+  fill(100);
+  text("Press ESC to go back", cx, height - 20);
 }
 
 // ============================================================
@@ -1958,9 +2132,10 @@ function drawPlayer() {
   translate(player.x, player.y);
   scale(playerFacing, 1);
 
-  if (selectedChar === 0) drawKnight(playerAnimFrame);
-  else if (selectedChar === 1) drawMage(playerAnimFrame);
-  else if (selectedChar === 2) drawWolf(playerAnimFrame);
+  const drawFn = characters[selectedChar].drawFn;
+  if (drawFn === "knight") drawKnight(playerAnimFrame);
+  else if (drawFn === "mage") drawMage(playerAnimFrame);
+  else if (drawFn === "wolf") drawWolf(playerAnimFrame);
 
   pop();
 }
@@ -1971,11 +2146,16 @@ function drawPlayer() {
 function drawGameplay() {
   background(0);
 
+  // Clip gameplay to left viewport
+  drawingContext.save();
+  drawingContext.beginPath();
+  drawingContext.rect(0, 0, gameViewportW, height);
+  drawingContext.clip();
+
   push();
 
-  // Follow player, clamping only when maze is larger than the screen.
-  // When the maze fits inside the screen, center it instead.
-  let camX = player.x - width / 2;
+  // Follow player, centered in the gameplay viewport
+  let camX = player.x - gameViewportW / 2;
   let camY = player.y - height / 2;
 
   if (gameState === "episode") {
@@ -1989,9 +2169,9 @@ function drawGameplay() {
   }
 
   if (isZoomedOut) {
-    translate(width / 2, height / 2);
+    translate(gameViewportW / 2, height / 2);
     scale(ZOOM_OUT_SCALE);
-    translate(-width / 2, -height / 2);
+    translate(-gameViewportW / 2, -height / 2);
   }
 
   translate(-camX, -camY);
@@ -2062,23 +2242,7 @@ function drawGameplay() {
     triangle(cx + s, cy + s * 2, cx - s * 0.5, cy + s * 0.3, cx + s * 0.3, cy);
   }
 
-  // --- Tutorial signs (Level 1) ---
-  for (const ts of tutorialSigns) {
-    if (shownSigns.has(`${ts.r},${ts.c}`)) continue; // already seen
-    const zx = ts.c * CELL_SIZE + CELL_SIZE / 2;
-    const zy = ts.r * CELL_SIZE + CELL_SIZE / 2;
-    const bob = sin(frameCount * 0.06) * 3;
 
-    // Floating "?" marker
-    noStroke();
-    fill(ts.color[0], ts.color[1], ts.color[2], 150);
-    circle(zx, zy + bob - 8, 20);
-    fill(255, 255, 255, 220);
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    textSize(14);
-    text("?", zx, zy + bob - 9);
-  }
 
   // --- Time boost pickups ---
   for (const tb of timeBoosts) {
@@ -2133,11 +2297,6 @@ function drawGameplay() {
   // --- HUD ---
   drawHUD();
 
-  // --- Tutorial sign popup ---
-  if (activeTutorialSign && tutorialSignTimer > 0) {
-    drawTutorialPopup(activeTutorialSign);
-  }
-
   // --- Episode overlay ---
   if (gameState === "episode") {
     drawEpisodeOverlay();
@@ -2147,49 +2306,72 @@ function drawGameplay() {
   if (microSpikeActive > 0) {
     noStroke();
     fill(255, 255, 255, ((0.05 * microSpikeActive) / 15) * 255);
-    rect(0, 0, width, height);
+    rect(0, 0, gameViewportW, height);
+  }
+
+  // Restore clipping
+  drawingContext.restore();
+
+  // --- Sidebar ---
+  drawSidebar();
+
+  // --- FTUE popup (drawn on top of everything, full screen) ---
+  if (activeFtuePopup) {
+    drawFtuePopup();
   }
 }
 
 // ============================================================
-// TUTORIAL SIGN POPUP
+// FTUE POPUP
 // ============================================================
-function drawTutorialPopup(sign) {
-  const fadeIn = Math.min(1, (180 - tutorialSignTimer) / 15); // fade in over 15 frames
-  const fadeOut = Math.min(1, tutorialSignTimer / 30); // fade out over 30 frames
-  const alpha = Math.min(fadeIn, fadeOut);
+function drawFtuePopup() {
+  if (!activeFtuePopup) return;
 
-  const boxW = 420;
-  const boxH = 100;
+  const popup = activeFtuePopup;
+  const boxW = 500;
+  const boxH = 160;
   const boxX = (width - boxW) / 2;
-  const boxY = 80;
+  const boxY = height * 0.3;
 
-  // Background
+  // Dim background
   noStroke();
-  fill(0, 0, 0, 200 * alpha);
-  rect(boxX, boxY, boxW, boxH, 8);
+  fill(0, 0, 0, 120);
+  rect(0, 0, width, height);
 
-  // Border with sign color
+  // Popup background
+  fill(10, 10, 15, 240);
+  rect(boxX, boxY, boxW, boxH, 10);
+
+  // Colored border
   noFill();
-  stroke(sign.color[0], sign.color[1], sign.color[2], 200 * alpha);
+  stroke(popup.color[0], popup.color[1], popup.color[2], 220);
   strokeWeight(2);
-  rect(boxX, boxY, boxW, boxH, 8);
+  rect(boxX, boxY, boxW, boxH, 10);
 
   // Title
   noStroke();
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
-  textSize(18);
-  fill(sign.color[0], sign.color[1], sign.color[2], 255 * alpha);
-  text(sign.title, width / 2, boxY + 22);
+  textSize(22);
+  fill(popup.color[0], popup.color[1], popup.color[2]);
+  text(popup.title, width / 2, boxY + 30);
 
   // Message lines
   textStyle(NORMAL);
-  textSize(14);
-  fill(220, 220, 220, 255 * alpha);
-  const lines = sign.message.split("\n");
+  textSize(16);
+  fill(220, 220, 220);
+  const lines = popup.message.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    text(lines[i], width / 2, boxY + 50 + i * 20);
+    text(lines[i], width / 2, boxY + 65 + i * 24);
+  }
+
+  // Dismiss prompt (blinking)
+  const blink = sin(frameCount * 0.08) > 0;
+  if (blink) {
+    textStyle(BOLD);
+    textSize(14);
+    fill(255, 255, 255, 200);
+    text("[ Press SPACE to continue ]", width / 2, boxY + boxH - 20);
   }
 }
 
@@ -2231,8 +2413,11 @@ function drawDirectionArrow() {
 // FOG OF WAR
 // ============================================================
 function drawFog() {
-  if (fogBuffer.width !== width || fogBuffer.height !== height) {
-    fogBuffer.resizeCanvas(width, height);
+  // Fog covers the gameplay viewport only
+  const fogW = gameViewportW;
+  const fogH = height;
+  if (fogBuffer.width !== fogW || fogBuffer.height !== fogH) {
+    fogBuffer.resizeCanvas(fogW, fogH);
   }
 
   const stressRatio = stress / 100;
@@ -2251,16 +2436,16 @@ function drawFog() {
   fogBuffer.clear();
 
   fCtx.fillStyle = "#000";
-  fCtx.fillRect(0, 0, fogBuffer.width, fogBuffer.height);
+  fCtx.fillRect(0, 0, fogW, fogH);
 
   fCtx.globalCompositeOperation = "destination-out";
 
   const gradient = fCtx.createRadialGradient(
-    fogBuffer.width / 2,
-    fogBuffer.height / 2,
+    fogW / 2,
+    fogH / 2,
     visRadius * 0.4,
-    fogBuffer.width / 2,
-    fogBuffer.height / 2,
+    fogW / 2,
+    fogH / 2,
     visRadius,
   );
   gradient.addColorStop(0, "rgba(0, 0, 0, 1)");
@@ -2269,7 +2454,7 @@ function drawFog() {
   gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
   fCtx.fillStyle = gradient;
-  fCtx.fillRect(0, 0, fogBuffer.width, fogBuffer.height);
+  fCtx.fillRect(0, 0, fogW, fogH);
 
   fCtx.globalCompositeOperation = "source-over";
 
@@ -2280,20 +2465,21 @@ function drawFog() {
 // HUD
 // ============================================================
 function drawHUD() {
+  const vw = gameViewportW; // viewport width shorthand
   const padding = 20;
-  const barWidth = 340;
+  const barWidth = Math.min(400, vw * 0.4);
   const barHeight = 24;
 
   // --- Stress meter ---
-  const barX = (width - barWidth) / 2;
+  const barX = (vw - barWidth) / 2;
   const barY = height - padding - barHeight - 14;
 
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
-  textSize(16);
+  textSize(18);
   fill(170);
   noStroke();
-  text("STRESS", width / 2, barY - 14);
+  text("STRESS", vw / 2, barY - 14);
 
   fill(40, 40, 40, 200);
   rect(barX, barY, barWidth, barHeight);
@@ -2317,9 +2503,9 @@ function drawHUD() {
 
   noStroke();
   textStyle(BOLD);
-  textSize(14);
+  textSize(16);
   fill(255);
-  text(`${Math.floor(stress)}%`, width / 2, barY + barHeight / 2);
+  text(`${Math.floor(stress)}%`, vw / 2, barY + barHeight / 2);
 
   // --- Timer ---
   const minutes = Math.floor(timer / 60);
@@ -2330,17 +2516,17 @@ function drawHUD() {
   if (timer < 15) {
     fill(sin(frameCount * 0.2) > 0 ? color(244, 67, 54) : color(255, 102, 89));
     textStyle(BOLD);
-    textSize(42);
+    textSize(46);
   } else if (timer < 30) {
     fill(255, 152, 0);
     textStyle(BOLD);
-    textSize(36);
+    textSize(40);
   } else {
     fill(224);
     textStyle(BOLD);
-    textSize(36);
+    textSize(40);
   }
-  text(timeStr, width / 2, padding + 25);
+  text(timeStr, vw / 2, padding + 25);
 
   // +5s flash
   if (timeBoostFlash > 0) {
@@ -2348,17 +2534,11 @@ function drawHUD() {
     const flashY = padding + 55 - map(timeBoostFlash, 60, 0, 0, 15);
     fill(0, 200, 255, flashAlpha);
     textStyle(BOLD);
-    textSize(22);
-    text("+5s", width / 2, flashY);
+    textSize(26);
+    text("+5s", vw / 2, flashY);
   }
 
-  // --- Level name display ---
-  const config = LEVEL_CONFIGS[gameMode];
-  textAlign(RIGHT, CENTER);
-  textStyle(NORMAL);
-  textSize(14);
-  fill(120);
-  text(config.name, width - padding, padding + 12);
+  // Level name moved to sidebar
 
   // --- Zone indicators ---
   const { r, c } = getPlayerCell();
@@ -2370,34 +2550,34 @@ function drawHUD() {
   textAlign(CENTER, CENTER);
   if (inCalmZone) {
     textStyle(NORMAL);
-    textSize(18);
+    textSize(20);
     fill(255, 200, 100, 200);
-    text("~ Calm Zone ~", width / 2, padding + 60);
+    text("~ Calm Zone ~", vw / 2, padding + 60);
   }
   const inScaryZone = scaryZones.some((sz) => sz.r === r && sz.c === c);
   if (inScaryZone) {
     textStyle(NORMAL);
-    textSize(18);
+    textSize(20);
     fill(200, 50, 50, 200);
-    text("! Danger Zone !", width / 2, padding + 60);
+    text("! Danger Zone !", vw / 2, padding + 60);
   }
   if (inHighStressZone) {
     const pulse = sin(frameCount * 0.15) > 0;
     textStyle(BOLD);
-    textSize(20);
+    textSize(22);
     fill(200, 0, 255, pulse ? 255 : 180);
-    text("!! HIGH STRESS AREA !!", width / 2, padding + 60);
+    text("!! HIGH STRESS AREA !!", vw / 2, padding + 60);
     textStyle(NORMAL);
-    textSize(14);
+    textSize(16);
     fill(200, 150, 255, 200);
-    text("Controls will invert - stay focused!", width / 2, padding + 82);
+    text("Controls will invert - stay focused!", vw / 2, padding + 84);
   }
 
   if (isZoomedOut) {
     textStyle(BOLD);
-    textSize(18);
+    textSize(20);
     fill(255, 170, 0, 200);
-    text("ZOOMED OUT (Stress +)", width / 2, padding + 100);
+    text("ZOOMED OUT (Stress +)", vw / 2, padding + 102);
   }
 
   // --- Episode warning ---
@@ -2406,53 +2586,198 @@ function drawHUD() {
       textStyle(BOLD);
       textSize(26);
       fill(255, 23, 68);
-      text("!! EPISODE !!", width / 2, height / 2 - 65);
+      text("!! EPISODE !!", vw / 2, height / 2 - 65);
     }
     textStyle(NORMAL);
     textSize(16);
     fill(204);
     text(
       "Controls inverted - Stop moving or find a calm zone",
-      width / 2,
+      vw / 2,
       height / 2 - 35,
     );
   }
 
-  // --- Controls reminder ---
-  textAlign(LEFT, CENTER);
+  // --- Controls reminder (moved to sidebar) ---
+}
+
+// ============================================================
+// SIDEBAR
+// ============================================================
+function drawSidebar() {
+  const sx = sidebarX;
+  const sw = sidebarW;
+  const padding = 12;
+  let y = padding;
+
+  // Dark panel background
+  noStroke();
+  fill(12, 12, 18);
+  rect(sx, 0, sw, height);
+
+  // Left border
+  stroke(50);
+  strokeWeight(1);
+  line(sx, 0, sx, height);
+  noStroke();
+
+  // Clip sidebar content
+  drawingContext.save();
+  drawingContext.beginPath();
+  drawingContext.rect(sx, 0, sw, height);
+  drawingContext.clip();
+
+  const cx = sx + sw / 2;
+
+  // --- Level Info ---
+  textAlign(CENTER, TOP);
   textStyle(BOLD);
   textSize(14);
-  fill(255);
-  text(
-    "P = Pause | R = Restart | Shift = Run | Z = Zoom Out | ESC = Menu",
-    padding,
-    padding + 12,
-  );
+  const config = LEVEL_CONFIGS[gameMode];
+  if (gameMode === "level1") fill(0, 255, 120);
+  else if (gameMode === "level2") fill(255, 200, 0);
+  else if (gameMode === "level3") fill(255, 60, 60);
+  else fill(100, 180, 255);
+  text(config.name, cx, y);
+  y += 24;
+
+  textStyle(NORMAL);
+  textSize(11);
+  fill(120);
+  text(`${config.cols}x${config.rows}  |  ${config.time}s`, cx, y);
+  y += 24;
+
+  // Divider
+  stroke(40);
+  strokeWeight(1);
+  line(sx + padding, y, sx + sw - padding, y);
+  noStroke();
+  y += 12;
+
+  // --- Character Info ---
+  const ch = characters[selectedChar];
+  textAlign(CENTER, TOP);
+  textStyle(BOLD);
+  textSize(15);
+  fill(200);
+  text(ch.name, cx, y);
+  y += 20;
+
+  // Character preview (small)
+  push();
+  translate(cx, y + 20);
+  scale(1.2);
+  const previewFrame = floor(frameCount / 20) % 3;
+  const df = ch.drawFn;
+  if (df === "knight") drawKnight(previewFrame);
+  else if (df === "mage") drawMage(previewFrame);
+  else if (df === "wolf") drawWolf(previewFrame);
+  pop();
+  y += 55;
+
+  textStyle(NORMAL);
+  textSize(12);
+  fill(150);
+  text(ch.spdDesc, cx, y);
+  y += 16;
+  text(ch.strDesc, cx, y);
+  y += 24;
+
+  // Divider
+  stroke(40);
+  strokeWeight(1);
+  line(sx + padding, y, sx + sw - padding, y);
+  noStroke();
+  y += 12;
+
+  // --- Zone Legend ---
+  textAlign(LEFT, TOP);
+  textStyle(BOLD);
+  textSize(12);
+  fill(170);
+  text("ZONES", sx + padding, y);
+  y += 18;
+
+  const zones = [
+    { color: [255, 200, 100], label: "Calm (heal)" },
+    { color: [200, 50, 50], label: "Danger (stress)" },
+    { color: [0, 200, 255], label: "Time Boost (+5s)" },
+  ];
+  if (gameMode === "level3") {
+    zones.push({ color: [200, 0, 255], label: "High-Stress" });
+  }
+
+  textStyle(NORMAL);
+  textSize(11);
+  for (const z of zones) {
+    noStroke();
+    fill(z.color[0], z.color[1], z.color[2]);
+    circle(sx + padding + 5, y + 5, 8);
+    fill(160);
+    text(z.label, sx + padding + 14, y);
+    y += 16;
+  }
+  y += 10;
+
+  // Divider
+  stroke(40);
+  strokeWeight(1);
+  line(sx + padding, y, sx + sw - padding, y);
+  noStroke();
+  y += 12;
+
+  // --- Controls ---
+  textAlign(LEFT, TOP);
+  textStyle(BOLD);
+  textSize(12);
+  fill(170);
+  text("CONTROLS", sx + padding, y);
+  y += 18;
+
+  textStyle(NORMAL);
+  textSize(10);
+  fill(140);
+  const controls = [
+    "WASD / Arrows = Move",
+    "Shift = Run",
+    "Z = Zoom Out",
+    "P = Pause",
+    "R = Restart",
+    "ESC = Menu",
+  ];
+  for (const ctrl of controls) {
+    text(ctrl, sx + padding, y);
+    y += 15;
+  }
+
+  // Restore sidebar clipping
+  drawingContext.restore();
 }
 
 // ============================================================
 // EPISODE OVERLAY
 // ============================================================
 function drawEpisodeOverlay() {
+  const vw = gameViewportW;
   const ctx = drawingContext;
   const gradient = ctx.createRadialGradient(
-    width / 2,
+    vw / 2,
     height / 2,
     50,
-    width / 2,
+    vw / 2,
     height / 2,
-    width / 2,
+    vw / 2,
   );
   gradient.addColorStop(0, "rgba(50, 0, 0, 0)");
   gradient.addColorStop(0.6, "rgba(50, 0, 0, 0.3)");
   gradient.addColorStop(1, "rgba(20, 0, 0, 0.7)");
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, vw, height);
 
   noStroke();
   fill(0, 0, 0, 20);
   for (let y = 0; y < height; y += 4) {
-    rect(0, y, width, 2);
+    rect(0, y, vw, 2);
   }
 }
 
@@ -2471,7 +2796,7 @@ function drawPauseOverlay() {
   text("PAUSED", width / 2, height / 2 - 20);
 
   textStyle(NORMAL);
-  textSize(20);
+  textSize(24);
   fill(170);
   text("Press P to resume | R to restart", width / 2, height / 2 + 35);
 }
@@ -2505,22 +2830,22 @@ function drawWinScreen() {
   const timeLeft = Math.floor(timer);
   const config = LEVEL_CONFIGS[gameMode];
   textStyle(NORMAL);
-  textSize(22);
+  textSize(24);
   fill(170);
   text(`You reached the end with ${timeLeft} seconds to spare.`, cx, cy + 15);
-  text("You kept control through the chaos.", cx, cy + 48);
+  text("You kept control through the chaos.", cx, cy + 50);
 
   // Show level completed
-  textSize(18);
+  textSize(20);
   if (gameMode === "level1") fill(0, 255, 120);
   else if (gameMode === "level2") fill(255, 200, 0);
   else if (gameMode === "level3") fill(255, 60, 60);
   else fill(100, 180, 255);
-  text(config.name + " Complete!", cx, cy + 85);
+  text(config.name + " Complete!", cx, cy + 90);
 
-  textSize(18);
+  textSize(22);
   fill(102);
-  text("Press ENTER to return to menu | R to play again", cx, cy + 120);
+  text("Press ENTER to return to menu | R to play again", cx, cy + 125);
 }
 
 // ============================================================
@@ -2549,18 +2874,18 @@ function drawLoseScreen() {
   }
 
   textStyle(NORMAL);
-  textSize(22);
+  textSize(24);
   fill(170);
   text("You couldn't make it through in time.", cx, cy + 15);
-  text("The maze consumed you.", cx, cy + 48);
+  text("The maze consumed you.", cx, cy + 50);
 
   // Show level
   const config = LEVEL_CONFIGS[gameMode];
-  textSize(16);
-  fill(120);
-  text(config.name, cx, cy + 80);
-
   textSize(18);
+  fill(120);
+  text(config.name, cx, cy + 85);
+
+  textSize(22);
   fill(102);
-  text("Press ENTER to return to menu | R to try again", cx, cy + 110);
+  text("Press ENTER to return to menu | R to try again", cx, cy + 118);
 }
