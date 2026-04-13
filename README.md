@@ -1,13 +1,17 @@
 ## Project Title
 
-GBDA302 Assignment 2: Lost Control, An Epilepsy Awareness Experience, You are on a journey but terrified of what’s to come. Navigate the maze before time runs out. But beware… you might lose control.
+GBDA302 Assignment 3: Lost Control, An Epilepsy Awareness Experience, You are on a journey but terrified of what’s to come. Navigate the maze before time runs out. But beware… you might lose control. 
 
 ---
 
 ## Group Number
 
 16B
-
+Noah Figueiredo 21081129
+Daniel Chen 21093922
+Hoy Wu 21054473
+Tabish Nazary 21061443
+Jayden Ribeiro 21061748
 ---
 
 ## Description
@@ -33,18 +37,18 @@ Zones:
 Yellow glow = Calm Zone (reduces stress)
 Red glow = Danger Zone (increases stress)
 Blue orb = Time Boost (+5 seconds)
-Stress & Episodes: Stress rises over time, faster when running or in danger zones. At 100% stress, an episode triggers: controls invert and vision shrinks.
-Timer: You have 90 seconds. The timer is shown at the top of the screen. If it hits 0, you lose.
+Pink Glow = (increases stress extremely fast)
+Stress & Episodes: Stress rises over time, faster when running or in danger zones. At 100% stress, an episode triggers: controls invert and vision shrinks. 
+Timer: You have limited time. The timer is shown at the top of the screen. Different timers for each difficulty level. If it hits 0, you lose. 
 
 Objective
-Reach the green exit at the end of the maze before the 90-second timer runs out.
+Reach the green exit at the end of the maze before the timer runs out.
 
 ---
 
 ## Iteration Notes
 
-Post-Playest: The three main changes that we made based on the playtesting session were; Make the game look more aesthetic, so we added characters and texture to the overall game. We also added an arrow that sticks beside the character showing the user where the finish area of the maze is, to make it more clear and easier. The last one, was us adding blue circles throughout the map that provide the user with extra time (+5 seconds). We did this because the game felt a little too difficult.
-Post-Showcase: We have a lot to improve to ensure our game is perfect. We plan on fixing two main things; we want to add levels to the game because the game is already too difficult. We want the first level to act as more of a tutorial and then once they unlock that level, they can move on to a harder game (ex; less time, higher stress tolerance). The second thing we want to add to the game for the future is to add more consumables that can either positively or negatively affect the character making the game more unpredictable.
+Post-Playest: The playtest really allowed us to see what the game is lacking and how it can be improved from a new perspective. After gathering all the feedback the three main things that we focused on adding into our game were, enhancing the overall UI of the game, increasing the size of the game, and managing three separate levels of the game based on difficulty. In terms of the overall UI, we wanted to make the interface look more aesthetic and have it be more interactive providing things like popups for the user. We also thought that because the maze looks so small when the light radius is not as big, we should make the actual game fit bigger on the screen so it doesn't look as small. Finally, the biggest implementation we did was adding diverse levels based on difficulty and the maze structure that allow the game to be played for beginners and people who are more experienced. We prioritized our tutorial to really support the user and explain the game to them in a cool way instead of just giving them instructions. 
 
 ---
 
